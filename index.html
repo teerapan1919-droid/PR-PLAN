@@ -20,6 +20,9 @@
     <script src="https://unpkg.com/pizzip@3.1.4/dist/pizzip.min.js"></script>
     <script src="https://unpkg.com/docxtemplater@3.37.11/build/docxtemplater.js"></script>
     <script src="https://unpkg.com/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+	
+	<!-- Docxtemplater Image Module (แทรกรูปลง Word) -->
+    <script src="https://cdn.jsdelivr.net/npm/docxtemplater-image-module-free@1.1.1/build/imagemodule.js"></script>
 
     <!-- Google Fonts: Sarabun -->
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -827,6 +830,7 @@
             const { data: school } = await supabaseClient.from('school_info').select('id, allocations_config').limit(1).single();
             const docRun = school?.allocations_config?.doc_run || { current_num: 1, year_text: '70' };
             const schoolId = school?.id || null;
+            const adminSigUrl = school?.allocations_config?.admin_sig_url || ''; // 🌟 ดึงลิงก์ลายเซ็น
 
             let rowsHtml = '';
             if (tpls && tpls.length > 0) {
@@ -878,6 +882,21 @@
                                 <button onclick="window.saveDocRunConfig(${schoolId})" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md font-medium text-sm shadow-sm transition flex-1"><i data-lucide="save" class="w-4 h-4 inline mr-1"></i> บันทึกเลข</button>
                             </div>
                             <div class="text-[11px] text-slate-500 mt-2">* ตัวอย่างเลขที่จะได้: <span class="font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100" id="doc_run_preview">${docRun.current_num}/${docRun.year_text}</span> (ระบบจะบวก 1 ให้อัตโนมัติเมื่อมีการขอเบิกใหม่)</div>
+                        </div>
+						
+						<!-- 🌟 ส่วนที่เพิ่มเข้ามา: อัปโหลดลายเซ็น Admin -->
+                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+                            <h3 class="font-bold text-slate-800 mb-4 text-base flex items-center gap-2"><i data-lucide="pen-tool" class="w-5 h-5 text-indigo-500"></i> ลายเซ็นผู้อนุมัติ (ไฟล์ .png)</h3>
+                            <div class="flex items-center gap-4">
+                                <div class="w-32 h-16 border-2 border-dashed border-slate-300 rounded-lg flex items-center justify-center bg-slate-50 overflow-hidden shrink-0">
+                                    ${adminSigUrl ? `<img src="${adminSigUrl}" class="max-h-full max-w-full object-contain">` : `<span class="text-xs text-slate-400">ยังไม่มีลายเซ็น</span>`}
+                                </div>
+                                <div class="flex-1 space-y-2">
+                                    <input type="file" id="sig_file" accept=".png" class="w-full border border-slate-300 rounded-md px-3 py-1.5 text-sm outline-none bg-white file:mr-4 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 cursor-pointer">
+                                    <button onclick="window.uploadAdminSig(${schoolId})" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded-md font-medium text-sm shadow-sm transition"><i data-lucide="upload" class="w-3 h-3 inline mr-1"></i> อัปโหลดลายเซ็น</button>
+                                    <div class="text-[11px] text-slate-500">* ใช้ไฟล์ .png แบบตัดพื้นหลัง (โปร่งใส)</div>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
@@ -993,7 +1012,33 @@
             hideLoader();
             Swal.fire({ icon: 'success', title: 'บันทึกการตั้งค่าเลขเอกสารแล้ว', showConfirmButton: false, timer: 1500 });
         }
+       
+	   // 🌟 ฟังก์ชันอัปโหลดและบันทึกลายเซ็นลงระบบ
+        window.uploadAdminSig = async (schoolId) => {
+            if (!schoolId) return;
+            const fileInput = document.getElementById('sig_file');
+            if(!fileInput.files.length) return Swal.fire({ icon: 'warning', text: 'กรุณาเลือกไฟล์ลายเซ็น .png ก่อนครับ' });
+            
+            showLoader(); 
+            const file = fileInput.files[0];
+            const safeFileName = `admin_sig_${Date.now()}.png`; 
 
+            const { error } = await supabaseClient.storage.from('pr_plan_storage').upload(`templates/${safeFileName}`, file);
+            if(error) { hideLoader(); return Swal.fire({ icon: 'error', text: error.message }); }
+            
+            const sigUrl = supabaseClient.storage.from('pr_plan_storage').getPublicUrl(`templates/${safeFileName}`).data.publicUrl;
+            
+            // นำลิงก์ไปบันทึกเก็บไว้ใน school_info -> allocations_config
+            const { data: school } = await supabaseClient.from('school_info').select('allocations_config').eq('id', schoolId).single();
+            let config = school.allocations_config || {};
+            config.admin_sig_url = sigUrl;
+            await supabaseClient.from('school_info').update({ allocations_config: config }).eq('id', schoolId);
+            
+            hideLoader(); 
+            Swal.fire({ icon: 'success', title: 'อัปโหลดลายเซ็นสำเร็จ', showConfirmButton: false, timer: 1500 }); 
+            navigate('templates');
+        }
+	   
        window.uploadTpl = async () => {
             const fileInput = document.getElementById('tpl_file');
             const name = document.getElementById('tpl_name').value.trim();
@@ -4253,104 +4298,85 @@
 		// =========================================================
         // ฟังก์ชันสร้างเอกสาร Word (.docx) จาก Template
         // =========================================================
-        // 🌟 ฟังก์ชันเสริม: ส่งไฟล์ไปแปลงเป็น PDF ที่ GAS (อัปเดตแก้ CORS)
-        window.convertToPdfAndDownload = (wordBlob, fileName) => {
-            Swal.fire({ title: 'กำลังสร้างไฟล์ PDF...', text: 'อาจใช้เวลา 5-10 วินาที กรุณารอสักครู่', allowOutsideClick: false, didOpen: () => { Swal.showLoading() } });
-            
-            const reader = new FileReader();
-            reader.readAsDataURL(wordBlob);
-            reader.onloadend = async function() {
-                const base64data = reader.result.split(',')[1];
+		// 🌟 ชุดคำสั่งพิเศษขั้นเด็ดขาด: ปลดล็อกระบบความปลอดภัยของ Chrome ลึกระดับการสร้าง Element
+        if (!window.isDomPatchedForImageModule) {
+            const originalParse = window.DOMParser.prototype.parseFromString;
+            window.DOMParser.prototype.parseFromString = function(string, type) {
+                const doc = originalParse.call(this, string, type);
                 
-                try {
-                    // ⚠️ ใส่ลิงก์ Web App URL ของคุณครู
-                    const gasUrl = "https://script.google.com/macros/s/AKfycbyihIlqJp5dT63NhPDBFuj_YFvGaxnBqS3p8FHK_JxDR-26nr7jkAtv2cZRBwMIerMlRQ/exec";
-                    
-                    const response = await fetch(gasUrl, {
-                        redirect: "follow", // 🌟 บังคับให้วิ่งตาม Redirect ของ Google
-                        method: 'POST',
-                        headers: {
-                            "Content-Type": "text/plain;charset=utf-8", // 🌟 เลี่ยงด่านตรวจ CORS Preflight
-                        },
-                        body: JSON.stringify({ fileName: fileName, fileData: base64data })
-                    });
-                    
-                    const result = await response.json();
-                    if(result.success) {
-                        const pdfUrl = 'data:application/pdf;base64,' + result.pdfData;
-                        const pdfRes = await fetch(pdfUrl);
-                        const pdfBlob = await pdfRes.blob();
-                        
-                        window.saveAs(pdfBlob, fileName.replace('.docx', '.pdf'));
-                        Swal.fire({ icon: 'success', title: 'ดาวน์โหลด PDF สำเร็จ!', showConfirmButton: false, timer: 1500 });
-                    } else {
-                        throw new Error(result.error);
+                // 1. ดักจับตอนที่ปลั๊กอินสร้างก้อน XML ใหม่ (จุดที่ Error ชอบเกิด)
+                const originalCreateElement = doc.createElement;
+                doc.createElement = function(tagName) {
+                    const el = originalCreateElement.call(doc, tagName);
+                    try {
+                        Object.defineProperty(el, 'namespaceURI', {
+                            get: function() { return this._nsURI || "http://schemas.openxmlformats.org/package/2006/relationships"; },
+                            set: function(val) { this._nsURI = val; },
+                            configurable: true
+                        });
+                    } catch(e) {}
+                    return el;
+                };
+
+                // 2. ดักจับก้อน XML เดิมที่มีอยู่แล้ว
+                const originalGetElements = doc.getElementsByTagName;
+                doc.getElementsByTagName = function(tagName) {
+                    const els = originalGetElements.call(doc, tagName);
+                    for(let i=0; i<els.length; i++) {
+                        try {
+                            if(!els[i]._patched) {
+                                Object.defineProperty(els[i], 'namespaceURI', {
+                                    get: function() { return this._nsURI || "http://schemas.openxmlformats.org/package/2006/relationships"; },
+                                    set: function(val) { this._nsURI = val; },
+                                    configurable: true
+                                });
+                                els[i]._patched = true;
+                            }
+                        } catch(e) {}
                     }
-                } catch (err) {
-                    console.error(err);
-                    Swal.fire({ icon: 'error', title: 'แปลงไฟล์ไม่สำเร็จ', text: err.message });
-                }
+                    return els;
+                };
+                return doc;
             };
-        };
-		
-		
-		
-		window.printExpenseDocument = async (projId, actId) => {
+            window.isDomPatchedForImageModule = true;
+        }
+
+        window.printExpenseDocument = async (projId, actId) => {
             showLoader();
             try {
                 let reqQuery = supabaseClient.from('expense_requests').select('*').eq('project_id', projId).eq('status', 'อนุมัติแล้ว').order('id', {ascending: false}).limit(1);
                 if (actId && actId !== 'null') reqQuery = reqQuery.eq('activity_id', actId);
 
-                const [reqRes, projRes, tplRes] = await Promise.all([
+                const [reqRes, projRes, tplRes, schoolRes] = await Promise.all([
                     reqQuery,
                     supabaseClient.from('projects').select('activities, app_users(name)').eq('id', projId).single(),
-                    supabaseClient.from('templates').select('*').order('id', {ascending: false}).limit(1)
+                    supabaseClient.from('templates').select('*').order('id', {ascending: false}).limit(1),
+                    supabaseClient.from('school_info').select('allocations_config').limit(1).single()
                 ]);
 
-                if (!reqRes.data || reqRes.data.length === 0) {
-                    hideLoader();
-                    return Swal.fire({ icon: 'warning', title: 'ไม่พบข้อมูล', text: 'ไม่พบใบขอเบิกที่ได้รับการอนุมัติแล้ว' });
-                }
-
-                if (!tplRes.data || tplRes.data.length === 0) {
-                    hideLoader();
-                    return Swal.fire({ icon: 'warning', title: 'ไม่พบ Template', text: 'กรุณาอัปโหลดไฟล์ Word Template ในเมนู "Template รายงาน" ก่อนครับ' });
-                }
+                if (!reqRes.data || reqRes.data.length === 0) { hideLoader(); return Swal.fire({ icon: 'warning', title: 'ไม่พบข้อมูล', text: 'ไม่พบใบขอเบิกที่ได้รับการอนุมัติแล้ว' }); }
+                if (!tplRes.data || tplRes.data.length === 0) { hideLoader(); return Swal.fire({ icon: 'warning', title: 'ไม่พบ Template' }); }
 
                 const req = reqRes.data[0];
-                const projActivities = projRes.data?.activities || [];
-                const currentAct = projActivities.find(a => a.id === actId) || {};
+                const currentAct = (projRes.data?.activities || []).find(a => a.id === actId) || {};
                 const templateUrl = tplRes.data[0].file_url;
+                const adminSigUrl = schoolRes.data?.allocations_config?.admin_sig_url || '';
+
+                const { data: allActReqs } = await supabaseClient.from('expense_requests').select('id, total_amount, status, created_at').eq('activity_id', req.activity_id).order('created_at', {ascending: true});
                 
-                // 🌟 ดึงประวัติเบิกจ่ายทั้งหมดของกิจกรรมนี้ เพื่อหา "ครั้งที่เบิก" และ "ยอดคงเหลือ"
-                const { data: allActReqs } = await supabaseClient.from('expense_requests')
-                    .select('id, total_amount, status, created_at')
-                    .eq('activity_id', req.activity_id)
-                    .order('created_at', {ascending: true});
-                
-                let reqRound = 1;
-                let usedBeforeThis = 0;
-                
+                let reqRound = 1; let usedBeforeThis = 0;
                 if (allActReqs && allActReqs.length > 0) {
-                    // นับรวมเฉพาะที่ "อนุมัติแล้ว" หรือ "เป็นใบเบิกที่กำลังพิมพ์อยู่"
                     const validReqs = allActReqs.filter(r => r.status === 'อนุมัติแล้ว' || r.id === req.id);
                     const roundIndex = validReqs.findIndex(r => r.id === req.id);
-                    
                     if (roundIndex !== -1) {
                         reqRound = roundIndex + 1;
-                        // คำนวณยอดเงินที่ถูกใช้ไป 'ก่อนหน้า' ใบนี้
-                        for(let i = 0; i < roundIndex; i++) {
-                            usedBeforeThis += Number(validReqs[i].total_amount);
-                        }
+                        for(let i = 0; i < roundIndex; i++) { usedBeforeThis += Number(validReqs[i].total_amount); }
                     } else {
                         reqRound = validReqs.length + 1;
                         usedBeforeThis = validReqs.reduce((sum, r) => sum + Number(r.total_amount), 0);
                     }
                 }
-                
-                // ยอดคงเหลือ = งบเต็ม - ยอดที่เคยเบิกก่อนหน้า - ยอดที่เบิกในใบนี้
                 const actRemain = Math.max(0, Number(req.activity_budget) - usedBeforeThis - Number(req.total_amount));
-
                 const projOwnerName = projRes.data?.app_users?.name || '...........................';
                 let depName = req.department_id || '...........................';
 
@@ -4360,148 +4386,108 @@
                     const months = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
                     return { d: d.getDate(), m: months[d.getMonth()], y: d.getFullYear() + 543 };
                 };
-
-                const docD = formatDateParts(req.doc_date);
-                const startD = formatDateParts(req.start_date);
-                const endD = formatDateParts(req.end_date);
-                const deadD = formatDateParts(req.deadline_date);
+                const docD = formatDateParts(req.doc_date); const startD = formatDateParts(req.start_date); const endD = formatDateParts(req.end_date); const deadD = formatDateParts(req.deadline_date);
 
                 let itemsForWord = [];
                 (req.items || []).forEach((item, index) => {
-                    itemsForWord.push({
-                        index: index + 1,
-                        name: item.name || '',
-                        price: formatMoney(item.price),
-                        qty: item.qty || '',
-                        row_total: formatMoney((parseFloat(item.qty)||0) * (parseFloat(item.price)||0)),
-                        note: item.note || ''
-                    });
+                    itemsForWord.push({ index: index + 1, name: item.name || '', price: formatMoney(item.price), qty: item.qty || '', row_total: formatMoney((parseFloat(item.qty)||0) * (parseFloat(item.price)||0)), note: item.note || '' });
                 });
 
-                const b1 = req.budget_type_1 || '';
-                const b2 = req.budget_type_2 || '';
-                const expType = req.expense_type || '';
+                const b1 = req.budget_type_1 || ''; const b2 = req.budget_type_2 || ''; const expType = req.expense_type || '';
 
                 const dataToFill = {
-				    doc_num: req.request_code || '...................', // 🌟 เพิ่ม Tag นำเลขไปโชว์ใน Word
-                    c_sub: b1 === 'เงินอุดหนุนรายหัว' ? '☑' : '☐',
-                    c_sub_txt: b1 === 'เงินอุดหนุนรายหัว' ? b2 : '................................',
-                    c_inc: b1 === 'รายได้สถานศึกษา' ? '☑' : '☐',
-                    c_inc_txt: b1 === 'รายได้สถานศึกษา' ? b2 : '................................',
-                    c_oth: b1 === 'เงินอื่นๆ' ? '☑' : '☐',
-                    c_oth_txt: b1 === 'เงินอื่นๆ' ? b2 : '................................',
-
-                    c_buy: expType === 'ซื้อวัสดุ' ? '☑' : '☐',
-                    c_hire: expType === 'จัดจ้าง' ? '☑' : '☐',
-                    c_util: expType === 'สาธารณูปโภค' ? '☑' : '☐',
-                    c_travel: expType === 'ไปราชการ' ? '☑' : '☐',
-                    c_comp: expType === 'ค่าตอบแทนและใช้สอย' ? '☑' : '☐',
-
-                    doc_d: docD.d, doc_m: docD.m, doc_y: docD.y,
-                    start_d: startD.d, start_m: startD.m, start_y: startD.y,
-                    end_d: endD.d, end_m: endD.m, end_y: endD.y,
-                    dead_d: deadD.d, dead_m: deadD.m, dead_y: deadD.y,
-
-                    dep: depName,
-                    act_name: req.activity_name || '...........................',
-                    proj_name: req.project_name || '...........................',
-                    proj_owner: projOwnerName, 
-                    act_code: currentAct.code || '-',
-                    loc: req.location || '...........................',
-                    
-                    budget: formatMoney(req.activity_budget),
-                    req_amt: formatMoney(req.total_amount),
-                    req_round: reqRound.toString(), // 🌟 แปลงเป็นข้อความชัวร์ๆ
-                    act_remain: formatMoney(actRemain), // 🌟 ส่งตัวแปร งบคงเหลือ
-                    
-                    req_name: req.requester_name || '...........................',
-                    comm_p: req.comm_president || '...........................',
-                    comm_1: req.comm_1 || '...........................',
-                    comm_2: req.comm_2 || '...........................',
-
+                    doc_num: req.request_code || '...................',
+                    c_sub: b1 === 'เงินอุดหนุนรายหัว' ? '☑' : '☐', c_sub_txt: b1 === 'เงินอุดหนุนรายหัว' ? b2 : '................................',
+                    c_inc: b1 === 'รายได้สถานศึกษา' ? '☑' : '☐', c_inc_txt: b1 === 'รายได้สถานศึกษา' ? b2 : '................................',
+                    c_oth: b1 === 'เงินอื่นๆ' ? '☑' : '☐', c_oth_txt: b1 === 'เงินอื่นๆ' ? b2 : '................................',
+                    c_buy: expType === 'ซื้อวัสดุ' ? '☑' : '☐', c_hire: expType === 'จัดจ้าง' ? '☑' : '☐', c_util: expType === 'สาธารณูปโภค' ? '☑' : '☐', c_travel: expType === 'ไปราชการ' ? '☑' : '☐', c_comp: expType === 'ค่าตอบแทนและใช้สอย' ? '☑' : '☐',
+                    doc_d: docD.d, doc_m: docD.m, doc_y: docD.y, start_d: startD.d, start_m: startD.m, start_y: startD.y, end_d: endD.d, end_m: endD.m, end_y: endD.y, dead_d: deadD.d, dead_m: deadD.m, dead_y: deadD.y,
+                    dep: depName, act_name: req.activity_name || '...........................', proj_name: req.project_name || '...........................', proj_owner: projOwnerName, act_code: currentAct.code || '-', loc: req.location || '...........................',
+                    budget: formatMoney(req.activity_budget), req_amt: formatMoney(req.total_amount), req_round: reqRound.toString(), act_remain: formatMoney(actRemain),
+                    req_name: req.requester_name || '...........................', comm_p: req.comm_president || '...........................', comm_1: req.comm_1 || '...........................', comm_2: req.comm_2 || '...........................',
+                    admin_sig: adminSigUrl, // 🌟 ส่งรูปลิงก์ให้ระบบจัดการโหลดเอง
                     items: itemsForWord
                 };
 
                 const response = await fetch(templateUrl);
                 const arrayBuffer = await response.arrayBuffer();
-                
                 const zip = new window.PizZip(arrayBuffer);
-                const doc = new window.docxtemplater(zip, { paragraphLoop: true, linebreaks: true });
-                doc.render(dataToFill);
+                
+                const opts = {
+                    centered: false,
+                    getImage: function(tagValue, tagName) {
+                        return new Promise(function(resolve, reject) {
+                            const emptyB64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+                            const getEmpty = () => {
+                                const binary = window.atob(emptyB64);
+                                const bytes = new Uint8Array(binary.length);
+                                for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                                return bytes.buffer;
+                            };
+                            
+                            if (!tagValue) return resolve(getEmpty());
+                            
+                            fetch(tagValue).then(res => res.arrayBuffer())
+                                .then(buf => resolve(buf))
+                                .catch(() => resolve(getEmpty()));
+                        });
+                    },
+                    getSize: function() { return [120, 45]; }
+                };
+
+                const imageModule = new window.ImageModule(opts);
+                const doc = new window.docxtemplater(zip, { paragraphLoop: true, linebreaks: true, modules: [imageModule] });
+                
+                // 🌟 กลับมาใช้ renderAsync อย่างปลอดภัย เพราะเราปลดล็อกเบราว์เซอร์แล้ว 100%
+                await doc.renderAsync(dataToFill);
+
                 const out = doc.getZip().generate({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
                 
-               hideLoader();
-                // ส่งไฟล์ Word (out) เข้าเครื่องแปลง PDF อัตโนมัติ
-                window.convertToPdfAndDownload(out, `ขออนุมัติเบิกจ่าย_${req.request_code}.docx`);
+                hideLoader();
+                window.saveAs(out, `ขออนุมัติเบิกจ่าย_${req.request_code}.docx`);
                 
             } catch (error) {
                 hideLoader();
                 console.error(error);
-                Swal.fire({ icon: 'error', title: 'สร้างเอกสารล้มเหลว', text: 'กรุณาตรวจสอบว่าอัปโหลดเทมเพลตถูกต้องหรือไม่ หรือลองเปลี่ยนเบราว์เซอร์ดูครับ' });
+                Swal.fire({ icon: 'error', title: 'สร้างเอกสารล้มเหลว', text: 'เกิดข้อผิดพลาดในการโหลดหรือสร้างเอกสาร' });
             }
         };
-		
-		// =========================================================
-        // ฟังก์ชันสร้างเอกสาร Word (.docx) เจาะจงตาม ID ใบเบิก
-        // =========================================================
+
         window.printExpenseDocumentById = async (reqId) => {
             showLoader();
             try {
-                const { data: reqRes } = await supabaseClient.from('expense_requests').select('*').eq('id', reqId).single();
-                
-                if (!reqRes) {
-                    hideLoader();
-                    return Swal.fire({ icon: 'warning', title: 'ไม่พบข้อมูล', text: 'ไม่พบข้อมูลใบขอเบิกรายการนี้' });
-                }
-                const req = reqRes;
+                const { data: req } = await supabaseClient.from('expense_requests').select('*').eq('id', reqId).single();
+                if (!req) { hideLoader(); return Swal.fire({ icon: 'warning', title: 'ไม่พบข้อมูล' }); }
 
-                const [projRes, tplRes] = await Promise.all([
+                const [projRes, tplRes, schoolRes] = await Promise.all([
                     supabaseClient.from('projects').select('activities, app_users(name)').eq('id', req.project_id).single(),
-                    supabaseClient.from('templates').select('*').order('id', {ascending: false}).limit(1)
+                    supabaseClient.from('templates').select('*').order('id', {ascending: false}).limit(1),
+                    supabaseClient.from('school_info').select('allocations_config').limit(1).single()
                 ]);
 
-                if (!tplRes.data || tplRes.data.length === 0) {
-                    hideLoader();
-                    return Swal.fire({ icon: 'warning', title: 'ไม่พบ Template', text: 'กรุณาอัปโหลดไฟล์ Word Template ในเมนู "Template รายงาน" ก่อนครับ' });
-                }
+                if (!tplRes.data || tplRes.data.length === 0) { hideLoader(); return Swal.fire({ icon: 'warning', title: 'ไม่พบ Template' }); }
 
-                const projActivities = projRes.data?.activities || [];
-                const currentAct = projActivities.find(a => a.id === req.activity_id) || {};
+                const currentAct = (projRes.data?.activities || []).find(a => a.id === req.activity_id) || {};
                 const templateUrl = tplRes.data[0].file_url;
-                
-                // ชื่อเจ้าของโครงการ
-                const projOwnerName = projRes.data?.app_users?.name || '...........................';
+                const adminSigUrl = schoolRes.data?.allocations_config?.admin_sig_url || '';
 
-                let depName = req.department_id || '...........................';
-
-                // 🌟 [เพิ่มระบบคำนวณ] ดึงประวัติเบิกจ่ายทั้งหมดของกิจกรรมนี้ เพื่อหา "ครั้งที่เบิก" และ "ยอดคงเหลือ"
-                const { data: allActReqs } = await supabaseClient.from('expense_requests')
-                    .select('id, total_amount, status, created_at')
-                    .eq('activity_id', req.activity_id)
-                    .order('created_at', {ascending: true});
+                const { data: allActReqs } = await supabaseClient.from('expense_requests').select('id, total_amount, status, created_at').eq('activity_id', req.activity_id).order('created_at', {ascending: true});
                 
-                let reqRound = 1;
-                let usedBeforeThis = 0;
-                
+                let reqRound = 1; let usedBeforeThis = 0;
                 if (allActReqs && allActReqs.length > 0) {
-                    // นับรวมเฉพาะที่ "อนุมัติแล้ว" หรือ "เป็นใบเบิกที่กำลังพิมพ์อยู่"
                     const validReqs = allActReqs.filter(r => r.status === 'อนุมัติแล้ว' || r.id === req.id);
                     const roundIndex = validReqs.findIndex(r => r.id === req.id);
-                    
                     if (roundIndex !== -1) {
                         reqRound = roundIndex + 1;
-                        for(let i = 0; i < roundIndex; i++) {
-                            usedBeforeThis += Number(validReqs[i].total_amount);
-                        }
+                        for(let i = 0; i < roundIndex; i++) { usedBeforeThis += Number(validReqs[i].total_amount); }
                     } else {
                         reqRound = validReqs.length + 1;
                         usedBeforeThis = validReqs.reduce((sum, r) => sum + Number(r.total_amount), 0);
                     }
                 }
-                
-                // ยอดคงเหลือ = งบเต็ม - ยอดที่เคยเบิกก่อนหน้า - ยอดที่เบิกในใบนี้
                 const actRemain = Math.max(0, Number(req.activity_budget) - usedBeforeThis - Number(req.total_amount));
-                // 🌟 [สิ้นสุดระบบคำนวณ]
+                const projOwnerName = projRes.data?.app_users?.name || '...........................';
+                let depName = req.department_id || '...........................';
 
                 const formatDateParts = (dateString) => {
                     if (!dateString) return { d: '........', m: '..................', y: '............' };
@@ -4509,88 +4495,64 @@
                     const months = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
                     return { d: d.getDate(), m: months[d.getMonth()], y: d.getFullYear() + 543 };
                 };
-
-                const docD = formatDateParts(req.doc_date);
-                const startD = formatDateParts(req.start_date);
-                const endD = formatDateParts(req.end_date);
-                const deadD = formatDateParts(req.deadline_date);
+                const docD = formatDateParts(req.doc_date); const startD = formatDateParts(req.start_date); const endD = formatDateParts(req.end_date); const deadD = formatDateParts(req.deadline_date);
 
                 let itemsForWord = [];
                 (req.items || []).forEach((item, index) => {
-                    itemsForWord.push({
-                        index: index + 1,
-                        name: item.name || '',
-                        price: formatMoney(item.price),
-                        qty: item.qty || '',
-                        row_total: formatMoney((parseFloat(item.qty)||0) * (parseFloat(item.price)||0)),
-                        note: item.note || ''
-                    });
+                    itemsForWord.push({ index: index + 1, name: item.name || '', price: formatMoney(item.price), qty: item.qty || '', row_total: formatMoney((parseFloat(item.qty)||0) * (parseFloat(item.price)||0)), note: item.note || '' });
                 });
 
-                const b1 = req.budget_type_1 || '';
-                const b2 = req.budget_type_2 || '';
-                const expType = req.expense_type || '';
+                const b1 = req.budget_type_1 || ''; const b2 = req.budget_type_2 || ''; const expType = req.expense_type || '';
 
                 const dataToFill = {
-                    doc_num: req.request_code || '...................', // 🌟 เพิ่ม Tag นำเลขไปโชว์ใน Word
-                    c_sub: b1 === 'เงินอุดหนุนรายหัว' ? '☑' : '☐',
-                    c_sub_txt: b1 === 'เงินอุดหนุนรายหัว' ? b2 : '................................',
-                    c_inc: b1 === 'รายได้สถานศึกษา' ? '☑' : '☐',
-                    c_inc_txt: b1 === 'รายได้สถานศึกษา' ? b2 : '................................',
-                    c_oth: b1 === 'เงินอื่นๆ' ? '☑' : '☐',
-                    c_oth_txt: b1 === 'เงินอื่นๆ' ? b2 : '................................',
-
-                    c_buy: expType === 'ซื้อวัสดุ' ? '☑' : '☐',
-                    c_hire: expType === 'จัดจ้าง' ? '☑' : '☐',
-                    c_util: expType === 'สาธารณูปโภค' ? '☑' : '☐',
-                    c_travel: expType === 'ไปราชการ' ? '☑' : '☐',
-                    c_comp: expType === 'ค่าตอบแทนและใช้สอย' ? '☑' : '☐',
-
-                    doc_d: docD.d, doc_m: docD.m, doc_y: docD.y,
-                    start_d: startD.d, start_m: startD.m, start_y: startD.y,
-                    end_d: endD.d, end_m: endD.m, end_y: endD.y,
-                    dead_d: deadD.d, dead_m: deadD.m, dead_y: deadD.y,
-
-                    dep: depName,
-                    act_name: req.activity_name || '...........................',
-                    proj_name: req.project_name || '...........................',
-                    proj_owner: projOwnerName, 
-                    act_code: currentAct.code || '-',
-                    loc: req.location || '...........................',
-                    
-                    budget: formatMoney(req.activity_budget),
-                    req_amt: formatMoney(req.total_amount),
-                    
-                    req_round: reqRound.toString(), // 🌟 แทรกตัวแปร "ครั้งที่เบิก"
-                    act_remain: formatMoney(actRemain), // 🌟 แทรกตัวแปร "ยอดคงเหลือ"
-                    
-                    req_name: req.requester_name || '...........................',
-                    comm_p: req.comm_president || '...........................',
-                    comm_1: req.comm_1 || '...........................',
-                    comm_2: req.comm_2 || '...........................',
-
+                    doc_num: req.request_code || '...................',
+                    c_sub: b1 === 'เงินอุดหนุนรายหัว' ? '☑' : '☐', c_sub_txt: b1 === 'เงินอุดหนุนรายหัว' ? b2 : '................................',
+                    c_inc: b1 === 'รายได้สถานศึกษา' ? '☑' : '☐', c_inc_txt: b1 === 'รายได้สถานศึกษา' ? b2 : '................................',
+                    c_oth: b1 === 'เงินอื่นๆ' ? '☑' : '☐', c_oth_txt: b1 === 'เงินอื่นๆ' ? b2 : '................................',
+                    c_buy: expType === 'ซื้อวัสดุ' ? '☑' : '☐', c_hire: expType === 'จัดจ้าง' ? '☑' : '☐', c_util: expType === 'สาธารณูปโภค' ? '☑' : '☐', c_travel: expType === 'ไปราชการ' ? '☑' : '☐', c_comp: expType === 'ค่าตอบแทนและใช้สอย' ? '☑' : '☐',
+                    doc_d: docD.d, doc_m: docD.m, doc_y: docD.y, start_d: startD.d, start_m: startD.m, start_y: startD.y, end_d: endD.d, end_m: endD.m, end_y: endD.y, dead_d: deadD.d, dead_m: deadD.m, dead_y: deadD.y,
+                    dep: depName, act_name: req.activity_name || '...........................', proj_name: req.project_name || '...........................', proj_owner: projOwnerName, act_code: currentAct.code || '-', loc: req.location || '...........................',
+                    budget: formatMoney(req.activity_budget), req_amt: formatMoney(req.total_amount), req_round: reqRound.toString(), act_remain: formatMoney(actRemain),
+                    req_name: req.requester_name || '...........................', comm_p: req.comm_president || '...........................', comm_1: req.comm_1 || '...........................', comm_2: req.comm_2 || '...........................',
+                    admin_sig: adminSigUrl,
                     items: itemsForWord
                 };
 
                 const response = await fetch(templateUrl);
                 const arrayBuffer = await response.arrayBuffer();
-                
                 const zip = new window.PizZip(arrayBuffer);
-                const doc = new window.docxtemplater(zip, {
-                    paragraphLoop: true,
-                    linebreaks: true,
-                });
-
-                doc.render(dataToFill);
-
-                const out = doc.getZip().generate({
-                    type: "blob",
-                    mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                });
                 
-               hideLoader();
-                // ส่งไฟล์ Word (out) เข้าเครื่องแปลง PDF อัตโนมัติ
-                window.convertToPdfAndDownload(out, `ขออนุมัติเบิกจ่าย_${req.request_code}.docx`);
+                const opts = {
+                    centered: false,
+                    getImage: function(tagValue, tagName) {
+                        return new Promise(function(resolve, reject) {
+                            const emptyB64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+                            const getEmpty = () => {
+                                const binary = window.atob(emptyB64);
+                                const bytes = new Uint8Array(binary.length);
+                                for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                                return bytes.buffer;
+                            };
+                            
+                            if (!tagValue) return resolve(getEmpty());
+                            
+                            fetch(tagValue).then(res => res.arrayBuffer())
+                                .then(buf => resolve(buf))
+                                .catch(() => resolve(getEmpty()));
+                        });
+                    },
+                    getSize: function() { return [120, 45]; }
+                };
+
+                const imageModule = new window.ImageModule(opts);
+                const doc = new window.docxtemplater(zip, { paragraphLoop: true, linebreaks: true, modules: [imageModule] });
+                
+                await doc.renderAsync(dataToFill);
+
+                const out = doc.getZip().generate({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+                
+                hideLoader();
+                window.saveAs(out, `ขออนุมัติเบิกจ่าย_${req.request_code}.docx`);
                 
             } catch (error) {
                 hideLoader();
