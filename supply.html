@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PR-SUPPLY | ระบบงานพัสดุ</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: { fontFamily: { sans: ['Sarabun', 'sans-serif'] }, colors: { primary: '#4f46e5' } }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'Sarabun', sans-serif; background-color: #f8fafc; }
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        #loader { display: none; }
+        .loader-active { display: flex !important; }
+    </style>
+</head>
+<body class="text-slate-800 overflow-hidden h-screen flex">
+
+    <!-- Global Loader -->
+    <div id="loader" class="fixed inset-0 z-[100] bg-white/80 backdrop-blur-sm items-center justify-center">
+        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
+    </div>
+
+    <!-- Sidebar -->
+    <aside class="w-64 bg-white border-r border-slate-200 h-full flex flex-col z-20 transition-all duration-300 shadow-sm hidden md:flex">
+        <div class="p-6 border-b border-slate-100 flex items-center gap-3">
+            <div class="bg-emerald-100 text-emerald-600 p-2 rounded-xl"><i data-lucide="shopping-cart" class="w-6 h-6"></i></div>
+            <div class="font-bold text-xl tracking-tight text-slate-800">PR-SUPPLY</div>
+        </div>
+        
+        <!-- User Profile Mini -->
+        <div class="p-4 border-b border-slate-100 flex items-center gap-3 bg-slate-50/50">
+            <div class="w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold" id="sb-initial"></div>
+            <div class="overflow-hidden">
+                <div id="sb-name" class="font-bold text-sm text-slate-800 truncate">กำลังโหลด...</div>
+                <div id="sb-role" class="text-xs text-slate-500 truncate">Role</div>
+            </div>
+        </div>
+
+        <nav class="flex-1 overflow-y-auto py-4 px-3 space-y-1" id="desktop-menu"></nav>
+        
+        <div class="p-4 border-t border-slate-100">
+            <button onclick="window.backToPrPlan()" class="flex items-center gap-3 text-indigo-600 hover:bg-indigo-50 px-4 py-2.5 rounded-xl w-full transition text-sm font-medium mb-2">
+                <i data-lucide="pie-chart" class="w-4 h-4"></i> กลับระบบแผน
+            </button>
+            <button onclick="window.logout()" class="flex items-center gap-3 text-red-500 hover:bg-red-50 px-4 py-2.5 rounded-xl w-full transition text-sm font-medium">
+                <i data-lucide="log-out" class="w-4 h-4"></i> ออกจากระบบ
+            </button>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col h-screen overflow-hidden bg-slate-50/50">
+        <!-- Topbar Mobile -->
+        <header class="md:hidden bg-white px-4 py-3 flex justify-between items-center z-10 border-b border-slate-200">
+            <div class="font-bold text-emerald-600 flex items-center gap-2"><i data-lucide="shopping-cart" class="w-5 h-5"></i> PR-SUPPLY</div>
+            <button onclick="window.backToPrPlan()" class="text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-100">กลับ PR-PLAN</button>
+        </header>
+
+        <!-- Content Area -->
+        <div class="flex-1 overflow-y-auto p-4 md:p-8" id="content-area"></div>
+    </main>
+
+    <script>
+        // ==========================================
+        // 0. ตั้งค่าการเชื่อมต่อฐานข้อมูล & ฟังก์ชันพื้นฐาน
+        // ==========================================
+        const SUPABASE_URL = 'https://gemcyqflrwklazujosne.supabase.co';
+        const SUPABASE_ANON_KEY = 'sb_publishable_qnGGbcRmNQEcm92-FuklPA_sornSUeo';
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        const showLoader = () => document.getElementById('loader').classList.add('loader-active');
+        const hideLoader = () => document.getElementById('loader').classList.remove('loader-active');
+        const formatMoney = (num) => Number(num || 0).toLocaleString('th-TH');
+
+        // ==========================================
+        // 1. ตรวจสอบการ Login ด้วย LocalStorage และตรวจสอบสิทธิ์
+        // ==========================================
+        const sessionData = localStorage.getItem('pr_user_session');
+        let AppUser = null;
+        
+        if (!sessionData) {
+            Swal.fire({ icon: 'error', title: 'กรุณาเข้าสู่ระบบ', text: 'ไม่พบข้อมูลการเข้าสู่ระบบ', showConfirmButton: false, timer: 1500 });
+            setTimeout(() => { window.location.href = 'index.html'; }, 1500);
+        } else {
+            AppUser = JSON.parse(sessionData);
+            
+            // 🌟 ล็อกประตูหลังบ้าน: ถ้าไม่ใช่ Admin เด้งกลับหน้า index ทันที
+            if (AppUser.sys_role !== 'Admin') {
+                Swal.fire({ icon: 'error', title: 'ไม่อนุญาตให้เข้าถึง', text: 'คุณไม่มีสิทธิ์เข้าใช้งานระบบพัสดุครับ', showConfirmButton: false, timer: 2000 });
+                setTimeout(() => { window.location.href = 'index.html'; }, 2000);
+            } else {
+                document.getElementById('sb-name').innerText = AppUser.name;
+                document.getElementById('sb-role').innerText = AppUser.sys_role;
+                document.getElementById('sb-initial').innerText = AppUser.name.charAt(0);
+            }
+        }
+		
+		// ... (โค้ดตรวจสอบสิทธิ์ด้านบน) ...
+        
+        window.backToPrPlan = () => { window.location.href = 'index.html'; }
+        window.logout = () => {
+            localStorage.removeItem('pr_user_session');
+            window.location.href = 'index.html';
+        }
+
+        // ==========================================
+        // 2. เมนูและ Routing
+        // ==========================================
+        let currentRoute = 'dashboard';
+        const MENU_ITEMS = [
+            { id: 'dashboard', label: 'หน้าแรก', icon: 'layout-dashboard' },
+            { id: 'departments', label: 'หน้ากลุ่มงาน', icon: 'briefcase' },
+            { id: 'vendors', label: 'หน้าร้านค้า/ผู้รับจ้าง', icon: 'store' },
+            { id: 'units', label: 'หน้ารายการหน่วยนับพัสดุ', icon: 'scale' },
+            { id: 'categories', label: 'หน้ากลุ่ม/ประเภทพัสดุ', icon: 'tags' },
+            { id: 'items', label: 'หน้ารายการพัสดุแนบท้าย', icon: 'package-search' },
+            { id: 'procurement', label: 'หน้าจัดซื้อ/จัดจ้าง', icon: 'shopping-bag' },
+            { id: 'material_acc', label: 'หน้าบัญชีวัสดุ', icon: 'book-open' },
+            { id: 'asset_reg', label: 'หน้าทะเบียนคุมทรัพย์สิน', icon: 'monitor' },
+            { id: 'requisition', label: 'หน้าใบเบิกพัสดุ', icon: 'file-output' }
+        ];
+
+        function renderMenu() {
+            document.getElementById('desktop-menu').innerHTML = MENU_ITEMS.map(m => `
+                <button onclick="window.navigate('${m.id}')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition ${currentRoute === m.id ? 'bg-emerald-50 text-emerald-700 font-bold border border-emerald-100' : 'text-slate-600 hover:bg-slate-50'}">
+                    <i data-lucide="${m.icon}" class="w-5 h-5 ${currentRoute === m.id ? 'text-emerald-600' : 'text-slate-400'}"></i> ${m.label}
+                </button>
+            `).join('');
+            lucide.createIcons();
+        }
+
+       window.navigate = (route) => {
+            currentRoute = route;
+            renderMenu();
+            const container = document.getElementById('content-area');
+            
+            if (route === 'dashboard') renderDashboardPage(container);
+            else if (route === 'departments') renderDepartmentsPage(container);
+            else if (route === 'vendors') renderVendorsPage(container);
+            else if (route === 'units') renderUnitsPage(container); // 🌟 เพิ่มบรรทัดนี้สำหรับหน้าหน่วยนับ
+            else renderPlaceholderPage(container, route);
+            
+            lucide.createIcons();
+        }
+
+        // ==========================================
+        // 3. หน้า Dashboard (หน้าแรก) 
+        // สร้างเลียนแบบตามภาพตัวอย่าง EGP EASY
+        // ==========================================
+        function renderDashboardPage(container) {
+            container.innerHTML = `
+                <div class="fade-in max-w-7xl mx-auto">
+                    <!-- Banner ต้อนรับ -->
+                    <div class="bg-gradient-to-r from-indigo-600 to-blue-500 rounded-2xl p-6 md:p-8 text-white mb-6 shadow-md relative overflow-hidden">
+                        <div class="relative z-10">
+                            <h1 class="text-2xl md:text-3xl font-bold mb-2">ยินดีต้อนรับสู่ระบบงานพัสดุ PR-SUPPLY</h1>
+                            <p class="text-indigo-100 text-sm">ระบบบริหารจัดการพัสดุและจัดซื้อจัดจ้างสำหรับสถานศึกษา</p>
+                        </div>
+                        <i data-lucide="boxes" class="absolute -right-4 -bottom-4 w-40 h-40 text-white opacity-10"></i>
+                    </div>
+
+                    <!-- 4 กล่องสถิติ -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                        <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex justify-between items-center group">
+                            <div>
+                                <div class="text-slate-500 text-xs font-bold mb-1">จำนวนจัดซื้อทั้งหมด</div>
+                                <div class="text-3xl font-bold text-slate-800">0</div>
+                            </div>
+                            <div class="w-12 h-12 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg shadow-red-500/30 group-hover:scale-110 transition"><i data-lucide="shopping-cart" class="w-5 h-5"></i></div>
+                        </div>
+                        <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex justify-between items-center group">
+                            <div>
+                                <div class="text-slate-500 text-xs font-bold mb-1">จำนวนจัดจ้างทั้งหมด</div>
+                                <div class="text-3xl font-bold text-slate-800">0</div>
+                            </div>
+                            <div class="w-12 h-12 bg-orange-500 text-white rounded-full flex items-center justify-center shadow-lg shadow-orange-500/30 group-hover:scale-110 transition"><i data-lucide="briefcase" class="w-5 h-5"></i></div>
+                        </div>
+                        <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex justify-between items-center group">
+                            <div>
+                                <div class="text-slate-500 text-xs font-bold mb-1">พัสดุสิ้นเปลืองทั้งหมด</div>
+                                <div class="text-3xl font-bold text-slate-800">0</div>
+                            </div>
+                            <div class="w-12 h-12 bg-emerald-500 text-white rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/30 group-hover:scale-110 transition"><i data-lucide="package" class="w-5 h-5"></i></div>
+                        </div>
+                        <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex justify-between items-center group">
+                            <div>
+                                <div class="text-slate-500 text-xs font-bold mb-1">มูลค่าซื้อ/จ้างทั้งหมด</div>
+                                <div class="text-3xl font-bold text-slate-800">0 <span class="text-sm font-normal text-slate-400">บาท</span></div>
+                            </div>
+                            <div class="w-12 h-12 bg-blue-500 text-white rounded-full flex items-center justify-center shadow-lg shadow-blue-500/30 group-hover:scale-110 transition"><i data-lucide="bar-chart-2" class="w-5 h-5"></i></div>
+                        </div>
+                    </div>
+
+                    <!-- 2 ตารางล่าง -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 min-h-[300px]">
+                            <h3 class="font-bold text-slate-800 mb-4 flex items-center gap-2 border-b border-slate-100 pb-3"><i data-lucide="clock" class="w-5 h-5 text-red-500"></i> ข้อมูล 5 รายการจัดซื้อล่าสุด</h3>
+                            <div class="flex items-center justify-center h-40 text-slate-400 text-sm">
+                                ยังไม่มีข้อมูลการจัดซื้อ
+                            </div>
+                        </div>
+                        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 min-h-[300px]">
+                            <h3 class="font-bold text-slate-800 mb-4 flex items-center gap-2 border-b border-slate-100 pb-3"><i data-lucide="clock" class="w-5 h-5 text-orange-500"></i> ข้อมูล 5 รายการจัดจ้างล่าสุด</h3>
+                            <div class="flex items-center justify-center h-40 text-slate-400 text-sm">
+                                ยังไม่มีข้อมูลการจัดจ้าง
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // หน้า Placeholder สำหรับเมนูที่ยังไม่ได้ทำ
+        function renderPlaceholderPage(container, route) {
+            const menu = MENU_ITEMS.find(m => m.id === route);
+            container.innerHTML = `
+                <div class="flex flex-col items-center justify-center h-full text-slate-400 fade-in">
+                    <i data-lucide="${menu.icon}" class="w-16 h-16 mb-4 text-slate-300"></i>
+                    <h2 class="text-2xl font-bold text-slate-500 mb-2">${menu.label}</h2>
+                    <p class="text-sm">กำลังอยู่ในขั้นตอนการพัฒนา...</p>
+                </div>
+            `;
+        }
+
+        // เริ่มต้นการทำงาน
+        window.navigate('dashboard');
+      
+	  // ==========================================
+        // 4. หน้ากลุ่มงาน (Departments สำหรับงานพัสดุ)
+        // ==========================================
+        async function renderDepartmentsPage(container) {
+            showLoader();
+            // 🌟 เปลี่ยนมาดึงข้อมูลจากตารางใหม่ supply_departments
+            const { data: deps, error } = await supabaseClient.from('supply_departments').select('id, name').order('id', { ascending: true });
+            hideLoader();
+
+            window.currentDeps = deps || [];
+
+            container.innerHTML = `
+                <div class="mb-6 fade-in flex flex-col md:flex-row md:items-end justify-between gap-4">
+                    <div>
+                        <h2 class="text-2xl font-bold mb-1 flex items-center gap-2 text-emerald-700"><i data-lucide="briefcase" class="w-6 h-6"></i> ข้อมูลกลุ่มงาน</h2>
+                        <p class="text-slate-500 text-sm">จัดการข้อมูลกลุ่มงาน / ฝ่าย สำหรับระบบงานพัสดุโดยเฉพาะ</p>
+                    </div>
+                    <button onclick="window.openDepModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl shadow-md transition font-medium flex items-center gap-2 text-sm"><i data-lucide="plus-circle" class="w-4 h-4"></i> เพิ่มข้อมูลใหม่</button>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden fade-in">
+                    <!-- แถบค้นหาและเลือกจำนวนแถว -->
+                    <div class="p-4 border-b border-slate-100 flex flex-wrap justify-between items-center gap-4 bg-slate-50">
+                        <div class="flex items-center gap-2 text-slate-600 text-sm font-medium">
+                            แสดง 
+                            <select class="border border-slate-300 rounded-lg px-2 py-1.5 outline-none focus:border-emerald-500 bg-white">
+                                <option>25</option><option>50</option><option>100</option>
+                            </select> 
+                            รายการ
+                        </div>
+                        <div class="relative w-full md:w-auto">
+                            <i data-lucide="search" class="absolute left-3 top-2.5 w-4 h-4 text-slate-400"></i>
+                            <input type="text" id="search_dep" onkeyup="window.filterDeps()" placeholder="ค้นหากลุ่มงาน..." class="w-full md:w-64 pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition">
+                        </div>
+                    </div>
+
+                    <!-- ตารางข้อมูล -->
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm whitespace-nowrap">
+                            <thead class="bg-slate-100 text-slate-700 border-b border-slate-200">
+                                <tr>
+                                    <th class="p-3 font-semibold text-center w-24">ลำดับ</th>
+                                    <th class="p-3 font-semibold">ชื่อกลุ่มงาน</th>
+                                    <th class="p-3 font-semibold text-center w-32">จัดการข้อมูล</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dep_table_body" class="divide-y divide-slate-100">
+                                <!-- ข้อมูลจาก JS จะมาแทรกตรงนี้ -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- แถบด้านล่าง (Pagination Info) -->
+                    <div class="p-4 border-t border-slate-100 text-sm text-slate-500 flex flex-wrap justify-between items-center bg-white gap-4">
+                        <div id="dep_count_info" class="font-medium">แสดง 0 ถึง 0 จาก 0 รายการ</div>
+                        <div class="flex gap-1">
+                            <button class="px-3 py-1.5 border border-slate-200 rounded-md text-slate-400 bg-slate-50 cursor-not-allowed">&lt;</button>
+                            <button class="px-3 py-1.5 border border-slate-200 rounded-md text-slate-400 bg-slate-50 cursor-not-allowed">&gt;</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MODAL เพิ่ม/แก้ไขกลุ่มงาน -->
+                <div id="dep-modal" class="hidden fixed inset-0 z-[80] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 fade-in">
+                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+                        <div class="bg-emerald-600 text-white p-4 flex justify-between items-center">
+                            <h3 class="font-bold flex items-center gap-2" id="dep_modal_title"><i data-lucide="plus-circle" class="w-5 h-5"></i> เพิ่มกลุ่มงานใหม่</h3>
+                            <button onclick="window.closeDepModal()" class="text-white hover:bg-white/20 p-1 rounded-lg transition"><i data-lucide="x" class="w-5 h-5"></i></button>
+                        </div>
+                        <div class="p-6">
+                            <input type="hidden" id="dep_id">
+                            <label class="block text-sm font-bold text-slate-700 mb-2">ชื่อกลุ่มงาน <span class="text-red-500">*</span></label>
+                            <input type="text" id="dep_name" placeholder="ระบุชื่อกลุ่มงาน..." class="w-full border border-slate-300 rounded-xl px-4 py-3 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition shadow-sm">
+                        </div>
+                        <div class="bg-slate-50 p-4 border-t border-slate-100 flex justify-end gap-2">
+                            <button onclick="window.closeDepModal()" class="bg-white border border-slate-300 text-slate-600 hover:bg-slate-50 px-4 py-2.5 rounded-xl font-medium transition shadow-sm">ยกเลิก</button>
+                            <button onclick="window.saveDep()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl font-medium shadow-md transition flex items-center gap-2"><i data-lucide="save" class="w-4 h-4"></i> บันทึกข้อมูล</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            window.renderDepTable(window.currentDeps);
+            lucide.createIcons();
+        }
+
+        // ฟังก์ชันวาดตาราง
+        window.renderDepTable = (data) => {
+            const tbody = document.getElementById('dep_table_body');
+            let html = '';
+            if(data.length === 0) {
+                html = `<tr><td colspan="3" class="p-8 text-center text-slate-400">ไม่พบข้อมูล</td></tr>`;
+            } else {
+                data.forEach((d, i) => {
+                    html += `
+                        <tr class="hover:bg-emerald-50/50 transition">
+                            <td class="p-3 text-center text-slate-500">${i+1}</td>
+                            <td class="p-3 text-slate-800 font-medium">${d.name}</td>
+                            <td class="p-3 text-center">
+                                <div class="flex items-center justify-center gap-2">
+                                    <button onclick="window.openDepModal(${d.id}, '${d.name}')" class="text-amber-500 hover:bg-amber-100 p-1.5 rounded-md transition" title="แก้ไข"><i data-lucide="edit" class="w-4 h-4"></i></button>
+                                    <button onclick="window.deleteDep(${d.id})" class="text-red-500 hover:bg-red-100 p-1.5 rounded-md transition" title="ลบ"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                });
+            }
+            tbody.innerHTML = html;
+            
+            const total = data.length;
+            document.getElementById('dep_count_info').innerText = `แสดง ${total > 0 ? 1 : 0} ถึง ${total} จาก ${total} รายการ`;
+            lucide.createIcons();
+        }
+
+        // ฟังก์ชันค้นหา
+        window.filterDeps = () => {
+            const text = document.getElementById('search_dep').value.toLowerCase();
+            const filtered = window.currentDeps.filter(d => d.name.toLowerCase().includes(text));
+            window.renderDepTable(filtered);
+        }
+
+        // ฟังก์ชันควบคุม Modal
+        window.openDepModal = (id = null, name = '') => {
+            document.getElementById('dep_id').value = id || '';
+            document.getElementById('dep_name').value = name;
+            document.getElementById('dep_modal_title').innerHTML = id 
+                ? `<i data-lucide="edit" class="w-5 h-5"></i> แก้ไขกลุ่มงาน` 
+                : `<i data-lucide="plus-circle" class="w-5 h-5"></i> เพิ่มกลุ่มงานใหม่`;
+            document.getElementById('dep-modal').classList.remove('hidden');
+            lucide.createIcons();
+        }
+
+        window.closeDepModal = () => { document.getElementById('dep-modal').classList.add('hidden'); }
+
+        // ฟังก์ชันบันทึกและลบข้อมูล
+        window.saveDep = async () => {
+            const id = document.getElementById('dep_id').value;
+            const name = document.getElementById('dep_name').value.trim();
+            
+            if(!name) return Swal.fire({ icon: 'warning', title: 'แจ้งเตือน', text: 'กรุณากรอกชื่อกลุ่มงาน', confirmButtonColor: '#10b981' });
+            
+            showLoader();
+            try {
+                if(id) {
+                    // 🌟 เปลี่ยนไปอัปเดตที่ตาราง supply_departments
+                    await supabaseClient.from('supply_departments').update({ name }).eq('id', id);
+                } else {
+                    // 🌟 เปลี่ยนไปบันทึกที่ตาราง supply_departments
+                    await supabaseClient.from('supply_departments').insert([{ name }]);
+                }
+                hideLoader();
+                Swal.fire({ icon: 'success', title: 'บันทึกข้อมูลสำเร็จ', showConfirmButton: false, timer: 1500 });
+                window.closeDepModal();
+                window.navigate('departments');
+            } catch (err) {
+                hideLoader();
+                Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: err.message });
+            }
+        }
+
+        window.deleteDep = (id) => {
+            Swal.fire({
+                title: 'ยืนยันการลบ?',
+                text: 'หากลบข้อมูลนี้แล้วจะไม่สามารถกู้คืนได้',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#94a3b8',
+                confirmButtonText: 'ลบข้อมูล',
+                cancelButtonText: 'ยกเลิก',
+                reverseButtons: true
+            }).then(async (res) => {
+                if(res.isConfirmed) {
+                    showLoader();
+                    // 🌟 เปลี่ยนไปลบที่ตาราง supply_departments
+                    await supabaseClient.from('supply_departments').delete().eq('id', id);
+                    hideLoader();
+                    Swal.fire({ icon: 'success', title: 'ลบข้อมูลสำเร็จ', showConfirmButton: false, timer: 1500 });
+                    window.navigate('departments');
+                }
+            });
+        }
+	  
+	  // ==========================================
+        // 5. หน้าร้านค้า/ผู้รับจ้าง (Vendors)
+        // ==========================================
+        async function renderVendorsPage(container) {
+            showLoader();
+            const { data: vendors, error } = await supabaseClient.from('supply_vendors').select('*').order('id', { ascending: true });
+            hideLoader();
+
+            window.currentVendors = vendors || [];
+
+            container.innerHTML = `
+                <div class="mb-6 fade-in flex flex-col md:flex-row md:items-end justify-between gap-4">
+                    <div>
+                        <h2 class="text-2xl font-bold mb-1 flex items-center gap-2 text-emerald-700"><i data-lucide="store" class="w-6 h-6"></i> ข้อมูลผู้ขาย / ผู้รับจ้าง</h2>
+                        <p class="text-slate-500 text-sm">จัดการข้อมูลร้านค้า บุคคลธรรมดา และนิติบุคคล</p>
+                    </div>
+                    <button onclick="window.openVendorModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl shadow-md transition font-medium flex items-center gap-2 text-sm"><i data-lucide="plus-circle" class="w-4 h-4"></i> เพิ่มข้อมูลใหม่</button>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden fade-in">
+                    <div class="p-4 border-b border-slate-100 flex flex-wrap justify-between items-center gap-4 bg-slate-50">
+                        <div class="flex items-center gap-2 text-slate-600 text-sm font-medium">
+                            แสดง 
+                            <select class="border border-slate-300 rounded-lg px-2 py-1.5 outline-none focus:border-emerald-500 bg-white">
+                                <option>25</option><option>50</option><option>100</option>
+                            </select> 
+                            รายการ
+                        </div>
+                        <div class="relative w-full md:w-auto">
+                            <i data-lucide="search" class="absolute left-3 top-2.5 w-4 h-4 text-slate-400"></i>
+                            <input type="text" id="search_vendor" onkeyup="window.filterVendors()" placeholder="ค้นหาร้านค้า..." class="w-full md:w-64 pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition">
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm whitespace-nowrap">
+                            <thead class="bg-slate-100 text-slate-700 border-b border-slate-200">
+                                <tr>
+                                    <th class="p-3 font-semibold text-center w-16">ลำดับ</th>
+                                    <th class="p-3 font-semibold w-32">ประเภท</th>
+                                    <th class="p-3 font-semibold">ชื่อร้านค้า</th>
+                                    <th class="p-3 font-semibold">ชื่อผู้จัดการ/ผู้บริหาร</th>
+                                    <th class="p-3 font-semibold text-center w-32">จัดการข้อมูล</th>
+                                </tr>
+                            </thead>
+                            <tbody id="vendor_table_body" class="divide-y divide-slate-100"></tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="p-4 border-t border-slate-100 text-sm text-slate-500 flex flex-wrap justify-between items-center bg-white gap-4">
+                        <div id="vendor_count_info" class="font-medium">แสดง 0 ถึง 0 จาก 0 รายการ</div>
+                    </div>
+                </div>
+
+                <!-- MODAL เพิ่ม/แก้ไขร้านค้า -->
+                <div id="vendor-modal" class="hidden fixed inset-0 z-[80] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 fade-in">
+                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                        <div class="bg-indigo-600 text-white p-4 flex justify-between items-center shrink-0">
+                            <h3 class="font-bold flex items-center gap-2" id="vendor_modal_title"><i data-lucide="plus-circle" class="w-5 h-5"></i> เพิ่มข้อมูลผู้ขาย / ผู้รับจ้าง</h3>
+                            <button onclick="window.closeVendorModal()" class="text-white hover:bg-white/20 p-1 rounded-lg transition"><i data-lucide="x" class="w-5 h-5"></i></button>
+                        </div>
+                        
+                        <!-- พื้นที่กรอกข้อมูล (มี Scrollbar) -->
+                        <div class="p-6 overflow-y-auto space-y-4 flex-1 bg-slate-50/50">
+                            <input type="hidden" id="v_id">
+                            
+                            <div>
+                                <label class="block text-sm font-bold text-slate-700 mb-1">ประเภทร้านค้า <span class="text-red-500">*</span></label>
+                                <select id="v_type" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 outline-none focus:border-indigo-500 bg-white shadow-sm">
+                                    <option value="บุคคลธรรมดา">บุคคลธรรมดา</option>
+                                    <option value="นิติบุคคล">นิติบุคคล</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-bold text-slate-700 mb-1">ชื่อบริษัท/ผู้ขาย/ผู้รับจ้าง <span class="text-red-500">*</span></label>
+                                <input type="text" id="v_name" placeholder="ระบุชื่อบริษัท หรือชื่อ-สกุล" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 outline-none focus:border-indigo-500 shadow-sm">
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-bold text-slate-700 mb-1">ชื่อผู้จัดการ/ผู้บริหาร (ในกรณีเป็นนิติบุคคล)</label>
+                                <input type="text" id="v_manager" placeholder="ระบุชื่อผู้จัดการ/ผู้บริหาร" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 outline-none focus:border-indigo-500 shadow-sm">
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-bold text-slate-700 mb-1">ที่อยู่</label>
+                                <textarea id="v_address" rows="2" placeholder="ระบุที่อยู่ครบถ้วน" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 outline-none focus:border-indigo-500 shadow-sm"></textarea>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-bold text-slate-700 mb-1">หมายเลขโทรศัพท์</label>
+                                    <input type="text" id="v_phone" placeholder="089-xxx-xxxx" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 outline-none focus:border-indigo-500 shadow-sm">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-bold text-slate-700 mb-1">หมายเลขแฟกซ์</label>
+                                    <input type="text" id="v_fax" placeholder="ระบุหมายเลขแฟกซ์" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 outline-none focus:border-indigo-500 shadow-sm">
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-bold text-slate-700 mb-1">เลขประจำตัวผู้เสียภาษี</label>
+                                <input type="text" id="v_tax" placeholder="เลขประจำตัว 13 หลัก" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 outline-none focus:border-indigo-500 shadow-sm">
+                            </div>
+
+                            <!-- หมวดหมู่ข้อมูลธนาคาร -->
+                            <div class="border-t border-slate-200 pt-4 mt-4">
+                                <label class="block text-sm font-bold text-slate-700 mb-1">ข้อมูลธนาคาร</label>
+                                <select id="v_bank_status" onchange="window.toggleBankFields()" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 outline-none focus:border-indigo-500 bg-white shadow-sm">
+                                    <option value="ไม่ระบุข้อมูล">ไม่ระบุข้อมูล</option>
+                                    <option value="ระบุข้อมูล">ระบุข้อมูล</option>
+                                </select>
+                            </div>
+                            
+                            <!-- ช่องกรอกธนาคาร (ซ่อน/แสดง อัตโนมัติ) -->
+                            <div id="bank_fields_container" class="hidden space-y-4 bg-indigo-50/50 p-4 rounded-xl border border-indigo-100">
+                                <div>
+                                    <label class="block text-sm font-bold text-slate-700 mb-1">ชื่อธนาคาร</label>
+                                    <input type="text" id="v_bank_name" placeholder="เช่น ธนาคารกรุงไทย" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 outline-none focus:border-indigo-500 shadow-sm">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-bold text-slate-700 mb-1">สาขา</label>
+                                    <input type="text" id="v_bank_branch" placeholder="ระบุสาขา" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 outline-none focus:border-indigo-500 shadow-sm">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-bold text-slate-700 mb-1">เลขบัญชีธนาคาร</label>
+                                    <input type="text" id="v_bank_acc" placeholder="ระบุเลขบัญชี" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 outline-none focus:border-indigo-500 shadow-sm">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ปุ่มกด (อยู่ล่างสุดเสมอ) -->
+                        <div class="bg-white p-4 border-t border-slate-100 flex justify-end gap-2 shrink-0">
+                            <button onclick="window.closeVendorModal()" class="bg-rose-50 text-rose-600 hover:bg-rose-100 px-5 py-2.5 rounded-xl font-medium transition shadow-sm">ปิดหน้าต่าง</button>
+                            <button onclick="window.saveVendor()" class="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-2.5 rounded-xl font-medium shadow-md transition flex items-center gap-2">บันทึกข้อมูล</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            window.renderVendorTable(window.currentVendors);
+            lucide.createIcons();
+        }
+
+        window.renderVendorTable = (data) => {
+            const tbody = document.getElementById('vendor_table_body');
+            let html = '';
+            if(data.length === 0) {
+                html = `<tr><td colspan="5" class="p-8 text-center text-slate-400">ไม่พบข้อมูลผู้ขาย/ผู้รับจ้าง</td></tr>`;
+            } else {
+                data.forEach((d, i) => {
+                    html += `
+                        <tr class="hover:bg-slate-50 transition border-b border-slate-50">
+                            <td class="p-3 text-center text-slate-500">${i+1}</td>
+                            <td class="p-3 text-slate-600">${d.vendor_type || '-'}</td>
+                            <td class="p-3 text-slate-800 font-medium">${d.vendor_name}</td>
+                            <td class="p-3 text-slate-600">${d.manager_name || '-'}</td>
+                            <td class="p-3 text-center">
+                                <div class="flex items-center justify-center gap-2">
+                                    <button onclick="window.openVendorModal(${d.id})" class="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-1.5 rounded-lg text-xs font-medium transition shadow-sm">แก้ไข</button>
+                                    <button onclick="window.deleteVendor(${d.id})" class="bg-rose-500 hover:bg-rose-600 text-white px-4 py-1.5 rounded-lg text-xs font-medium transition shadow-sm">ลบ</button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                });
+            }
+            tbody.innerHTML = html;
+            const total = data.length;
+            document.getElementById('vendor_count_info').innerText = `แสดง ${total > 0 ? 1 : 0} ถึง ${total} จาก ${total} รายการ`;
+        }
+
+        window.filterVendors = () => {
+            const text = document.getElementById('search_vendor').value.toLowerCase();
+            const filtered = window.currentVendors.filter(d => 
+                d.vendor_name.toLowerCase().includes(text) || 
+                (d.manager_name && d.manager_name.toLowerCase().includes(text))
+            );
+            window.renderVendorTable(filtered);
+        }
+
+        window.toggleBankFields = () => {
+            const status = document.getElementById('v_bank_status').value;
+            const container = document.getElementById('bank_fields_container');
+            if(status === 'ระบุข้อมูล') container.classList.remove('hidden');
+            else container.classList.add('hidden');
+        }
+
+        window.openVendorModal = (id = null) => {
+            document.getElementById('v_id').value = id || '';
+            const title = document.getElementById('vendor_modal_title');
+            
+            if(id) {
+                title.innerHTML = `<i data-lucide="edit" class="w-5 h-5"></i> แก้ไขข้อมูลผู้ขาย / ผู้รับจ้าง`;
+                const v = window.currentVendors.find(x => x.id === id);
+                document.getElementById('v_type').value = v.vendor_type || 'บุคคลธรรมดา';
+                document.getElementById('v_name').value = v.vendor_name || '';
+                document.getElementById('v_manager').value = v.manager_name || '';
+                document.getElementById('v_address').value = v.address || '';
+                document.getElementById('v_phone').value = v.phone || '';
+                document.getElementById('v_fax').value = v.fax || '';
+                document.getElementById('v_tax').value = v.tax_id || '';
+                document.getElementById('v_bank_status').value = v.bank_info_status || 'ไม่ระบุข้อมูล';
+                document.getElementById('v_bank_name').value = v.bank_name || '';
+                document.getElementById('v_bank_branch').value = v.bank_branch || '';
+                document.getElementById('v_bank_acc').value = v.bank_account || '';
+            } else {
+                title.innerHTML = `<i data-lucide="plus-circle" class="w-5 h-5"></i> เพิ่มข้อมูลผู้ขาย / ผู้รับจ้าง`;
+                document.getElementById('v_type').value = 'บุคคลธรรมดา';
+                document.getElementById('v_name').value = '';
+                document.getElementById('v_manager').value = '';
+                document.getElementById('v_address').value = '';
+                document.getElementById('v_phone').value = '';
+                document.getElementById('v_fax').value = '';
+                document.getElementById('v_tax').value = '';
+                document.getElementById('v_bank_status').value = 'ไม่ระบุข้อมูล';
+                document.getElementById('v_bank_name').value = '';
+                document.getElementById('v_bank_branch').value = '';
+                document.getElementById('v_bank_acc').value = '';
+            }
+            
+            window.toggleBankFields();
+            document.getElementById('vendor-modal').classList.remove('hidden');
+            lucide.createIcons();
+        }
+
+        window.closeVendorModal = () => { document.getElementById('vendor-modal').classList.add('hidden'); }
+
+        window.saveVendor = async () => {
+            const id = document.getElementById('v_id').value;
+            const payload = {
+                vendor_type: document.getElementById('v_type').value,
+                vendor_name: document.getElementById('v_name').value.trim(),
+                manager_name: document.getElementById('v_manager').value.trim(),
+                address: document.getElementById('v_address').value.trim(),
+                phone: document.getElementById('v_phone').value.trim(),
+                fax: document.getElementById('v_fax').value.trim(),
+                tax_id: document.getElementById('v_tax').value.trim(),
+                bank_info_status: document.getElementById('v_bank_status').value,
+                bank_name: document.getElementById('v_bank_name').value.trim(),
+                bank_branch: document.getElementById('v_bank_branch').value.trim(),
+                bank_account: document.getElementById('v_bank_acc').value.trim()
+            };
+            
+            if(!payload.vendor_name) return Swal.fire({ icon: 'warning', title: 'แจ้งเตือน', text: 'กรุณากรอกชื่อบริษัท/ผู้ขาย', confirmButtonColor: '#4f46e5' });
+            
+            showLoader();
+            try {
+                if(id) await supabaseClient.from('supply_vendors').update(payload).eq('id', id);
+                else await supabaseClient.from('supply_vendors').insert([payload]);
+                
+                hideLoader();
+                Swal.fire({ icon: 'success', title: 'บันทึกข้อมูลสำเร็จ', showConfirmButton: false, timer: 1500 });
+                window.closeVendorModal();
+                window.navigate('vendors'); 
+            } catch (err) {
+                hideLoader();
+                Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: err.message });
+            }
+        }
+		
+		window.deleteVendor = (id) => {
+            Swal.fire({
+                title: 'ยืนยันการลบ?',
+                text: 'หากลบข้อมูลนี้แล้วจะไม่สามารถกู้คืนได้',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#94a3b8',
+                confirmButtonText: 'ลบข้อมูล',
+                cancelButtonText: 'ยกเลิก',
+                reverseButtons: true
+            }).then(async (res) => {
+                if(res.isConfirmed) {
+                    showLoader();
+                    await supabaseClient.from('supply_vendors').delete().eq('id', id);
+                    hideLoader();
+                    Swal.fire({ icon: 'success', title: 'ลบข้อมูลสำเร็จ', showConfirmButton: false, timer: 1500 });
+                    window.navigate('vendors'); // โหลดหน้าตารางใหม่
+                }
+            });
+        }
+	  
+	  // ==========================================
+        // 6. หน้ารายการหน่วยนับพัสดุ (Units)
+        // ==========================================
+        async function renderUnitsPage(container) {
+            showLoader();
+            const { data: units, error } = await supabaseClient.from('supply_units').select('id, name').order('id', { ascending: true });
+            hideLoader();
+
+            window.currentUnits = units || [];
+
+            container.innerHTML = `
+                <div class="mb-6 fade-in flex flex-col md:flex-row md:items-end justify-between gap-4">
+                    <div>
+                        <h2 class="text-2xl font-bold mb-1 flex items-center gap-2 text-emerald-700"><i data-lucide="scale" class="w-6 h-6"></i> หน่วยนับรายการพัสดุ</h2>
+                        <p class="text-slate-500 text-sm">จัดการข้อมูลหน่วยนับ เช่น ชิ้น, อัน, เครื่อง, กล่อง ฯลฯ</p>
+                    </div>
+                    <button onclick="window.openUnitModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl shadow-md transition font-medium flex items-center gap-2 text-sm"><i data-lucide="plus-circle" class="w-4 h-4"></i> เพิ่มข้อมูลใหม่</button>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden fade-in">
+                    <!-- แถบค้นหา -->
+                    <div class="p-4 border-b border-slate-100 flex flex-wrap justify-between items-center gap-4 bg-slate-50">
+                        <div class="flex items-center gap-2 text-slate-600 text-sm font-medium">
+                            แสดง 
+                            <select class="border border-slate-300 rounded-lg px-2 py-1.5 outline-none focus:border-emerald-500 bg-white">
+                                <option>25</option><option>50</option><option>100</option>
+                            </select> 
+                            รายการ
+                        </div>
+                        <div class="relative w-full md:w-auto">
+                            <i data-lucide="search" class="absolute left-3 top-2.5 w-4 h-4 text-slate-400"></i>
+                            <input type="text" id="search_unit" onkeyup="window.filterUnits()" placeholder="ค้นหาหน่วยนับ..." class="w-full md:w-64 pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition">
+                        </div>
+                    </div>
+
+                    <!-- ตารางข้อมูล -->
+                    <div class="overflow-x-auto h-[50vh] overflow-y-auto">
+                        <table class="w-full text-left text-sm whitespace-nowrap">
+                            <thead class="bg-slate-100 text-slate-700 border-b border-slate-200 sticky top-0 z-10">
+                                <tr>
+                                    <th class="p-3 font-semibold text-center w-24">ลำดับ</th>
+                                    <th class="p-3 font-semibold">ชื่อหน่วยนับ</th>
+                                    <th class="p-3 font-semibold text-center w-32">จัดการข้อมูล</th>
+                                </tr>
+                            </thead>
+                            <tbody id="unit_table_body" class="divide-y divide-slate-100"></tbody>
+                        </table>
+                    </div>
+
+                    <div class="p-4 border-t border-slate-100 text-sm text-slate-500 flex flex-wrap justify-between items-center bg-white gap-4">
+                        <div id="unit_count_info" class="font-medium">แสดง 0 ถึง 0 จาก 0 รายการ</div>
+                    </div>
+                </div>
+
+                <!-- MODAL เพิ่ม/แก้ไขหน่วยนับ -->
+                <div id="unit-modal" class="hidden fixed inset-0 z-[80] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 fade-in">
+                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+                        <div class="bg-emerald-600 text-white p-4 flex justify-between items-center">
+                            <h3 class="font-bold flex items-center gap-2" id="unit_modal_title"><i data-lucide="plus-circle" class="w-5 h-5"></i> เพิ่มหน่วยนับรายการพัสดุ</h3>
+                            <button onclick="window.closeUnitModal()" class="text-white hover:bg-white/20 p-1 rounded-lg transition"><i data-lucide="x" class="w-5 h-5"></i></button>
+                        </div>
+                        <div class="p-6">
+                            <input type="hidden" id="unit_id">
+                            <label class="block text-sm font-bold text-slate-700 mb-2">ชื่อหน่วยนับ <span class="text-red-500">*</span></label>
+                            <input type="text" id="unit_name" placeholder="เช่น ชิ้น, อัน, เครื่อง..." class="w-full border border-slate-300 rounded-xl px-4 py-3 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition shadow-sm">
+                        </div>
+                        <div class="bg-slate-50 p-4 border-t border-slate-100 flex justify-end gap-2">
+                            <button onclick="window.closeUnitModal()" class="bg-white border border-slate-300 text-slate-600 hover:bg-slate-50 px-4 py-2.5 rounded-xl font-medium transition shadow-sm">ยกเลิก</button>
+                            <button onclick="window.saveUnit()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl font-medium shadow-md transition flex items-center gap-2"><i data-lucide="save" class="w-4 h-4"></i> บันทึกข้อมูล</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            window.renderUnitTable(window.currentUnits);
+            lucide.createIcons();
+        }
+
+        window.renderUnitTable = (data) => {
+            const tbody = document.getElementById('unit_table_body');
+            let html = '';
+            if(data.length === 0) {
+                html = `<tr><td colspan="3" class="p-8 text-center text-slate-400">ไม่พบข้อมูล</td></tr>`;
+            } else {
+                data.forEach((d, i) => {
+                    html += `
+                        <tr class="hover:bg-emerald-50/50 transition">
+                            <td class="p-3 text-center text-slate-500">${i+1}</td>
+                            <td class="p-3 text-slate-800 font-medium">${d.name}</td>
+                            <td class="p-3 text-center">
+                                <div class="flex items-center justify-center gap-2">
+                                    <button onclick="window.openUnitModal(${d.id}, '${d.name}')" class="bg-indigo-500 hover:bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition shadow-sm">แก้ไข</button>
+                                    <button onclick="window.deleteUnit(${d.id})" class="bg-rose-500 hover:bg-rose-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition shadow-sm">ลบ</button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                });
+            }
+            tbody.innerHTML = html;
+            const total = data.length;
+            document.getElementById('unit_count_info').innerText = `แสดง ${total > 0 ? 1 : 0} ถึง ${total} จาก ${total} รายการ`;
+        }
+
+        window.filterUnits = () => {
+            const text = document.getElementById('search_unit').value.toLowerCase();
+            const filtered = window.currentUnits.filter(d => d.name.toLowerCase().includes(text));
+            window.renderUnitTable(filtered);
+        }
+
+        window.openUnitModal = (id = null, name = '') => {
+            document.getElementById('unit_id').value = id || '';
+            document.getElementById('unit_name').value = name;
+            document.getElementById('unit_modal_title').innerHTML = id 
+                ? `<i data-lucide="edit" class="w-5 h-5"></i> แก้ไขหน่วยนับรายการพัสดุ` 
+                : `<i data-lucide="plus-circle" class="w-5 h-5"></i> เพิ่มหน่วยนับรายการพัสดุ`;
+            document.getElementById('unit-modal').classList.remove('hidden');
+            lucide.createIcons();
+        }
+
+        window.closeUnitModal = () => { document.getElementById('unit-modal').classList.add('hidden'); }
+
+        window.saveUnit = async () => {
+            const id = document.getElementById('unit_id').value;
+            const name = document.getElementById('unit_name').value.trim();
+            
+            if(!name) return Swal.fire({ icon: 'warning', title: 'แจ้งเตือน', text: 'กรุณากรอกชื่อหน่วยนับ', confirmButtonColor: '#10b981' });
+            
+            showLoader();
+            try {
+                if(id) await supabaseClient.from('supply_units').update({ name }).eq('id', id);
+                else await supabaseClient.from('supply_units').insert([{ name }]);
+                
+                hideLoader();
+                Swal.fire({ icon: 'success', title: 'บันทึกข้อมูลสำเร็จ', showConfirmButton: false, timer: 1500 });
+                window.closeUnitModal();
+                window.navigate('units');
+            } catch (err) {
+                hideLoader();
+                Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: err.message });
+            }
+        }
+
+        window.deleteUnit = (id) => {
+            Swal.fire({
+                title: 'ยืนยันการลบ?',
+                text: 'หากลบข้อมูลนี้แล้วจะไม่สามารถกู้คืนได้',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#94a3b8',
+                confirmButtonText: 'ลบข้อมูล',
+                cancelButtonText: 'ยกเลิก',
+                reverseButtons: true
+            }).then(async (res) => {
+                if(res.isConfirmed) {
+                    showLoader();
+                    await supabaseClient.from('supply_units').delete().eq('id', id);
+                    hideLoader();
+                    Swal.fire({ icon: 'success', title: 'ลบข้อมูลสำเร็จ', showConfirmButton: false, timer: 1500 });
+                    window.navigate('units');
+                }
+            });
+        }
+	  
+    </script>
+</body>
+</html>

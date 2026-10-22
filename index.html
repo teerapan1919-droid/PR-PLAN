@@ -132,6 +132,40 @@
         </div>
     </div>
 
+    <!-- ================= SYSTEM SELECTION ================= -->
+    <div id="system-selection" class="hidden h-screen bg-slate-50 flex items-center justify-center p-4 relative" style="background-image: url('https://gemcyqflrwklazujosne.supabase.co/storage/v1/object/public/pr_plan_storage/DJI_0602.JPG'); background-size: cover; background-position: center;">
+        <div class="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"></div>
+        <div class="relative z-10 bg-white/95 backdrop-blur-xl rounded-[2rem] shadow-2xl p-10 max-w-3xl w-full text-center fade-in border border-white/50">
+            <div class="inline-block p-3 bg-indigo-100 text-indigo-600 rounded-full mb-4"><i data-lucide="layers" class="w-8 h-8"></i></div>
+            <h2 class="text-3xl font-bold text-slate-800 mb-2">ยินดีต้อนรับ, <span id="welcome-name" class="text-indigo-600"></span></h2>
+            <p class="text-slate-500 mb-8">กรุณาเลือกระบบงานที่คุณต้องการเข้าใช้งาน</p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- ปุ่มเข้าระบบแผน -->
+                <button onclick="window.enterPRPLAN()" class="group flex flex-col items-center p-8 bg-white border-2 border-indigo-100 rounded-2xl hover:border-indigo-500 hover:shadow-xl hover:shadow-indigo-200/50 transition-all duration-300">
+                    <div class="w-20 h-20 bg-indigo-50 text-indigo-500 group-hover:bg-indigo-500 group-hover:text-white rounded-2xl flex items-center justify-center transition-colors duration-300 mb-4 shadow-inner">
+                        <i data-lucide="pie-chart" class="w-10 h-10"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-slate-800 group-hover:text-indigo-700 transition-colors">ระบบบริหารงบประมาณ</h3>
+                    <p class="text-sm text-slate-500 mt-2 font-medium">PR-PLAN</p>
+                </button>
+                
+                <!-- ปุ่มเข้าระบบพัสดุ -->
+                <button onclick="window.enterSupply()" class="group flex flex-col items-center p-8 bg-white border-2 border-emerald-100 rounded-2xl hover:border-emerald-500 hover:shadow-xl hover:shadow-emerald-200/50 transition-all duration-300">
+                    <div class="w-20 h-20 bg-emerald-50 text-emerald-500 group-hover:bg-emerald-500 group-hover:text-white rounded-2xl flex items-center justify-center transition-colors duration-300 mb-4 shadow-inner">
+                        <i data-lucide="shopping-cart" class="w-10 h-10"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-slate-800 group-hover:text-emerald-700 transition-colors">ระบบงานพัสดุ</h3>
+                    <p class="text-sm text-slate-500 mt-2 font-medium">PR-SUPPLY</p>
+                </button>
+            </div>
+            
+            <div class="mt-8">
+                <button onclick="window.promptLogout()" class="text-slate-400 hover:text-red-500 text-sm font-medium transition flex items-center justify-center gap-1 mx-auto"><i data-lucide="log-out" class="w-4 h-4"></i> ออกจากระบบ</button>
+            </div>
+        </div>
+    </div>
+
     <!-- ================= MAIN APP ================= -->
     <div id="main-app" class="hidden flex h-screen bg-slate-50">
         
@@ -250,32 +284,62 @@
             }
 
             AppState.user = data;
+            // 🌟 บันทึก Session ไว้ให้ระบบพัสดุดึงไปใช้
+            localStorage.setItem('pr_user_session', JSON.stringify(data)); 
+            
+            // 🌟 ซ่อนหน้า Login และแสดงหน้าเลือกระบบ
             document.getElementById('login-section').classList.add('hidden');
+            document.getElementById('system-selection').classList.remove('hidden');
+            document.getElementById('welcome-name').innerText = data.name;
+            lucide.createIcons();
+            
+            Swal.fire({ icon: 'success', title: 'เข้าสู่ระบบสำเร็จ', text: `ยินดีต้อนรับคุณ ${data.name}`, showConfirmButton: false, timer: 1500 });
+        }
+
+        // 🌟 ฟังก์ชันเข้าระบบแผน
+        window.enterPRPLAN = () => {
+            document.getElementById('system-selection').classList.add('hidden');
             document.getElementById('main-app').classList.remove('hidden');
             document.getElementById('main-app').classList.add('flex');
             
-            document.getElementById('sb-name').innerText = data.name;
-            document.getElementById('sb-role').innerText = data.sys_role;
-            const initial = data.name.charAt(0);
+            document.getElementById('sb-name').innerText = AppState.user.name;
+            document.getElementById('sb-role').innerText = AppState.user.sys_role;
+            const initial = AppState.user.name.charAt(0);
             document.getElementById('sb-initial').innerText = initial;
             document.getElementById('mob-initial').innerText = initial;
             
-            Swal.fire({ icon: 'success', title: 'เข้าสู่ระบบสำเร็จ', text: `ยินดีต้อนรับคุณ ${data.name}`, showConfirmButton: false, timer: 1500 });
             window.navigate('dashboard');
+        }
+
+       // 🌟 ฟังก์ชันเข้าระบบพัสดุ (ลิงก์ไปหน้าใหม่ พร้อมเช็คสิทธิ์ Admin)
+        window.enterSupply = () => {
+            // ดักจับสิทธิ์: ถ้าไม่ใช่ Admin จะเข้าไม่ได้
+            if (AppState.user.sys_role !== 'Admin') {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'ปฏิเสธการเข้าถึง',
+                    text: 'ระบบงานพัสดุสงวนสิทธิ์เฉพาะผู้ดูแลระบบ (Admin) หรือเจ้าหน้าที่พัสดุเท่านั้นครับ',
+                    confirmButtonColor: '#ef4444'
+                });
+                return; // หยุดการทำงาน ไม่ให้เปลี่ยนหน้า
+            }
+            
+            // ถ้าเป็น Admin ให้ผ่านไปหน้า supply.html ได้เลย
+            window.location.href = 'supply.html';
         }
 
         window.promptLogout = () => {
             Swal.fire({
-                title: 'ยืนยันการออกจากระบบ?',
-                icon: 'question',
-                showCancelButton: true,
+                title: 'ยืนยันการออกจากระบบ?', icon: 'question', showCancelButton: true,
                 confirmButtonColor: '#ef4444', cancelButtonColor: '#94a3b8',
                 confirmButtonText: 'ออกจากระบบ', cancelButtonText: 'ยกเลิก', reverseButtons: true
             }).then((result) => {
                 if(result.isConfirmed) {
                     AppState.user = null;
+                    localStorage.removeItem('pr_user_session'); // 🌟 ล้างเซสชั่น
                     document.getElementById('main-app').classList.add('hidden');
                     document.getElementById('main-app').classList.remove('flex');
+                    document.getElementById('system-selection').classList.add('hidden');
                     document.getElementById('landing-page').classList.remove('hidden');
                     document.getElementById('login-id').value = '';
                     document.getElementById('login-pass').value = '';
@@ -458,23 +522,54 @@
             dashBarChart = new Chart(document.getElementById('dashBar').getContext('2d'), { type: 'bar', data: { labels: depNames, datasets: [{ label: 'จำนวนโครงการ', data: depProjCounts, backgroundColor: '#6366f1', borderRadius: 6, barThickness: 30 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } } });
         }
 
-        // School Settings
+        // =========================================================
+        // School Settings (อัปเดตเพิ่มข้อมูลพัสดุ/บุคลากร)
+        // =========================================================
         async function renderSchoolPage(container) {
+            showLoader();
             const { data } = await supabaseClient.from('school_info').select('*').limit(1).single();
-            const info = data ? data : { name:'', director:'', address:'', phone:'', academic_year:'', telegram_token:'', telegram_chat_id:'', telegram_enabled: false };
+            hideLoader();
+            
+            const info = data ? data : { 
+                name:'', director:'', address:'', phone:'', academic_year:'', telegram_token:'', telegram_chat_id:'', telegram_enabled: false,
+                school_code:'', school_abbr:'', affiliation:'', tax_id:'', procurement_officer:'', head_procurement:'', finance_officer:'', system_admin:'' 
+            };
+            
             container.innerHTML = `
-                <div class="mb-6 fade-in"><h2 class="text-2xl font-bold">ข้อมูลพื้นฐานโรงเรียน</h2></div>
-                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 fade-in max-w-3xl">
-                    <form onsubmit="window.saveSchool(event, ${info.id ? info.id : null})" class="space-y-4">
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            ${Input('ชื่อโรงเรียน', 'school_name', info.name)}
-                            ${Input('ชื่อผู้อำนวยการ', 'school_dir', info.director)}
-                            <div class="md:col-span-2">${Input('ที่อยู่', 'school_addr', info.address)}</div>
-                            ${Input('เบอร์โทรศัพท์', 'school_phone', info.phone)}
-                            ${Input('ปีการศึกษา/ปีงบประมาณ', 'school_year', info.academic_year)}
+                <div class="mb-6 fade-in"><h2 class="text-2xl font-bold text-slate-800">ข้อมูลพื้นฐานโรงเรียนและบุคลากร</h2></div>
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 fade-in max-w-4xl">
+                    <form onsubmit="window.saveSchool(event, ${info.id ? info.id : null})" class="space-y-6">
+                        
+                        <!-- 🏫 หมวดข้อมูลสถานศึกษา -->
+                        <div>
+                            <h3 class="font-bold text-slate-800 mb-4 flex items-center gap-2 border-b border-slate-100 pb-2"><i data-lucide="school" class="w-5 h-5 text-indigo-500"></i> ข้อมูลสถานศึกษา</h3>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                ${Input('ชื่อโรงเรียน', 'school_name', info.name)}
+                                ${Input('อักษรย่อโรงเรียน', 'school_abbr', info.school_abbr)}
+                                ${Input('รหัสโรงเรียน', 'school_code', info.school_code)}
+                                ${Input('เลขประจำตัวผู้เสียภาษีโรงเรียน', 'tax_id', info.tax_id)}
+                                <div class="md:col-span-2">${Input('ชื่อหน่วยงานต้นสังกัด', 'affiliation', info.affiliation)}</div>
+                                <div class="md:col-span-2">${Input('ที่อยู่', 'school_addr', info.address)}</div>
+                                ${Input('เบอร์โทรศัพท์', 'school_phone', info.phone)}
+                                ${Input('ปีการศึกษา/ปีงบประมาณ', 'school_year', info.academic_year)}
+                            </div>
                         </div>
-                        <div class="mt-8 border-t border-slate-100 pt-6">
-                            <h3 class="font-bold text-slate-800 mb-4 flex items-center gap-2"><i data-lucide="send" class="w-5 h-5 text-blue-500"></i> ตั้งค่า Telegram การแจ้งเตือน</h3>
+
+                        <!-- 👥 หมวดข้อมูลบุคลากร -->
+                        <div>
+                            <h3 class="font-bold text-slate-800 mb-4 flex items-center gap-2 border-b border-slate-100 pb-2 mt-6"><i data-lucide="users" class="w-5 h-5 text-emerald-500"></i> ข้อมูลบุคลากร (สำหรับงานพัสดุและเอกสาร)</h3>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                ${Input('ผู้อำนวยการโรงเรียน', 'school_dir', info.director)}
+                                ${Input('ผู้ดูแลระบบ', 'system_admin', info.system_admin)}
+                                ${Input('เจ้าหน้าที่การเงิน', 'finance_officer', info.finance_officer)}
+                                ${Input('เจ้าหน้าที่พัสดุ', 'procurement_officer', info.procurement_officer)}
+                                ${Input('หัวหน้าเจ้าหน้าที่พัสดุ', 'head_procurement', info.head_procurement)}
+                            </div>
+                        </div>
+
+                        <!-- 🔔 หมวดตั้งค่า Telegram -->
+                        <div>
+                            <h3 class="font-bold text-slate-800 mb-4 flex items-center gap-2 border-b border-slate-100 pb-2 mt-6"><i data-lucide="send" class="w-5 h-5 text-blue-500"></i> ตั้งค่า Telegram การแจ้งเตือน</h3>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                                 ${Input('Bot Token', 'tg_token', info.telegram_token)}
                                 ${Input('Chat ID', 'tg_chat', info.telegram_chat_id)}
@@ -488,25 +583,51 @@
                                 <span class="text-sm font-medium text-slate-700">เปิดการแจ้งเตือน</span>
                             </label>
                         </div>
-                        <div class="flex gap-3 pt-6">
-                            <button type="submit" class="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-medium shadow-md">บันทึกข้อมูล</button>
-                            <button type="button" onclick="window.resetSchoolYear()" class="bg-red-50 text-red-600 px-6 py-2.5 rounded-xl hover:bg-red-100 font-medium border border-red-100">เริ่มปีการศึกษาใหม่</button>
+                        
+                        <div class="flex gap-3 pt-6 border-t border-slate-100">
+                            <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl font-medium shadow-md transition">บันทึกข้อมูลทั้งหมด</button>
+                            <button type="button" onclick="window.resetSchoolYear()" class="bg-red-50 hover:bg-red-100 text-red-600 px-6 py-2.5 rounded-xl font-medium border border-red-100 transition">เริ่มปีการศึกษาใหม่ (ล้างข้อมูลบิล)</button>
                         </div>
                     </form>
                 </div>
                 <style>input:checked ~ .toggle-bg { background-color: #10b981; } input:checked ~ .dot { transform: translateX(100%); }</style>
             `;
+            lucide.createIcons();
         }
+
         window.saveSchool = async (e, id) => {
-            e.preventDefault(); showLoader();
+            e.preventDefault(); 
+            showLoader();
             const payload = {
-                name: document.getElementById('school_name').value, director: document.getElementById('school_dir').value,
-                address: document.getElementById('school_addr').value, phone: document.getElementById('school_phone').value,
-                academic_year: document.getElementById('school_year').value, telegram_token: document.getElementById('tg_token').value,
-                telegram_chat_id: document.getElementById('tg_chat').value, telegram_enabled: document.getElementById('tg_enable').checked
+                // ข้อมูลเดิม
+                name: document.getElementById('school_name').value, 
+                director: document.getElementById('school_dir').value,
+                address: document.getElementById('school_addr').value, 
+                phone: document.getElementById('school_phone').value,
+                academic_year: document.getElementById('school_year').value, 
+                telegram_token: document.getElementById('tg_token').value,
+                telegram_chat_id: document.getElementById('tg_chat').value, 
+                telegram_enabled: document.getElementById('tg_enable').checked,
+                
+                // ข้อมูลใหม่ที่เพิ่มเข้ามา
+                school_code: document.getElementById('school_code').value,
+                school_abbr: document.getElementById('school_abbr').value,
+                affiliation: document.getElementById('affiliation').value,
+                tax_id: document.getElementById('tax_id').value,
+                procurement_officer: document.getElementById('procurement_officer').value,
+                head_procurement: document.getElementById('head_procurement').value,
+                finance_officer: document.getElementById('finance_officer').value,
+                system_admin: document.getElementById('system_admin').value
             };
-            if(id) await supabaseClient.from('school_info').update(payload).eq('id', id); else await supabaseClient.from('school_info').insert([payload]);
-            hideLoader(); Swal.fire({ icon: 'success', title: 'บันทึกสำเร็จ', showConfirmButton: false, timer: 1500 });
+            
+            if(id) {
+                await supabaseClient.from('school_info').update(payload).eq('id', id); 
+            } else {
+                await supabaseClient.from('school_info').insert([payload]);
+            }
+            
+            hideLoader(); 
+            Swal.fire({ icon: 'success', title: 'บันทึกสำเร็จ', showConfirmButton: false, timer: 1500 });
         };
 		
         window.resetSchoolYear = async () => {
