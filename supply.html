@@ -9,6 +9,10 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+	<!-- Script สำหรับสร้างไฟล์ Word (Docxtemplater) -->
+    <script src="https://unpkg.com/pizzip@3.1.4/dist/pizzip.min.js"></script>
+    <script src="https://unpkg.com/docxtemplater@3.37.11/build/docxtemplater.js"></script>
+    <script src="https://unpkg.com/file-saver@2.0.5/dist/FileSaver.min.js"></script>
     
     <script>
         tailwind.config = {
@@ -72,8 +76,25 @@
         </header>
 
         <!-- Content Area -->
-        <div class="flex-1 overflow-y-auto p-4 md:p-8" id="content-area"></div>
+        <div class="flex-1 overflow-y-auto p-4 pb-24 md:pb-8 md:p-8" id="content-area"></div>
     </main>
+	
+	<!-- Mobile Bottom Nav -->
+    <nav id="bottom-nav" class="md:hidden fixed bottom-0 w-full bg-white/90 backdrop-blur-md border-t border-slate-200 z-40 pb-safe">
+        <div class="flex justify-around items-center h-16" id="mobile-menu-container"></div>
+    </nav>
+
+    <!-- Mobile Panel (Menu Grid) -->
+    <div id="mobile-panel" class="hidden fixed inset-0 z-[60] bg-slate-900/50 backdrop-blur-sm fade-in">
+        <div class="absolute bottom-16 left-0 w-full bg-white rounded-t-3xl p-6 shadow-2xl">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="font-bold text-slate-800 flex items-center gap-2"><i data-lucide="layers" class="w-5 h-5 text-emerald-500"></i> เมนูระบบงานพัสดุ</h3>
+                <button onclick="window.toggleMobilePanel()" class="bg-slate-100 p-2 rounded-full text-slate-500 hover:bg-slate-200 transition"><i data-lucide="x" class="w-4 h-4"></i></button>
+            </div>
+            <!-- พื้นที่สำหรับปุ่มเมนู -->
+            <div class="grid grid-cols-3 gap-4 max-h-[60vh] overflow-y-auto p-1" id="mobile-grid-menu"></div>
+        </div>
+    </div>
 
     <script>
         // ==========================================
@@ -135,12 +156,54 @@
             { id: 'requisition', label: 'หน้าใบเบิกพัสดุ', icon: 'file-output' }
         ];
 
+        // ฟังก์ชันเปิด/ปิด เมนูมือถือ
+        let isMobilePanelOpen = false;
+        window.toggleMobilePanel = () => {
+            isMobilePanelOpen = !isMobilePanelOpen;
+            const panel = document.getElementById('mobile-panel');
+            if(isMobilePanelOpen) { 
+                panel.classList.remove('hidden'); panel.classList.add('block'); 
+            } else { 
+                panel.classList.add('hidden'); panel.classList.remove('block'); 
+            }
+        }
+
         function renderMenu() {
+            // 1. วาดเมนูสำหรับ Desktop
             document.getElementById('desktop-menu').innerHTML = MENU_ITEMS.map(m => `
                 <button onclick="window.navigate('${m.id}')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition ${currentRoute === m.id ? 'bg-emerald-50 text-emerald-700 font-bold border border-emerald-100' : 'text-slate-600 hover:bg-slate-50'}">
                     <i data-lucide="${m.icon}" class="w-5 h-5 ${currentRoute === m.id ? 'text-emerald-600' : 'text-slate-400'}"></i> ${m.label}
                 </button>
             `).join('');
+
+            // 2. วาดแถบเมนูด้านล่างสุด (Bottom Nav) สำหรับ Mobile
+            const mobContainer = document.getElementById('mobile-menu-container');
+            if (mobContainer) {
+                mobContainer.innerHTML = `
+                    <button onclick="window.navigate('dashboard')" class="flex flex-col items-center p-2 transition ${currentRoute === 'dashboard' ? 'text-emerald-600 font-bold' : 'text-slate-500 hover:text-emerald-500'}">
+                        <i data-lucide="layout-dashboard" class="w-6 h-6"></i><span class="text-[10px] mt-1">หน้าแรก</span>
+                    </button>
+                    <button onclick="window.toggleMobilePanel()" class="flex flex-col items-center p-3 -mt-6 bg-emerald-600 text-white rounded-full shadow-lg shadow-emerald-200 transition hover:scale-105 border-4 border-white">
+                        <i data-lucide="layout-grid" class="w-6 h-6"></i>
+                    </button>
+                    <button onclick="window.logout()" class="flex flex-col items-center p-2 text-slate-500 hover:text-red-500 transition">
+                        <i data-lucide="log-out" class="w-6 h-6"></i><span class="text-[10px] mt-1">ออก</span>
+                    </button>
+                `;
+            }
+
+            // 3. วาดปุ่ม Grid Menu ที่จะเด้งขึ้นมาบน Mobile (ซ่อนหน้าแรกเอาไว้เพราะมีปุ่มข้างล่างแล้ว)
+            const mobGrid = document.getElementById('mobile-grid-menu');
+            if (mobGrid) {
+                const gridItems = MENU_ITEMS.filter(m => m.id !== 'dashboard');
+                mobGrid.innerHTML = gridItems.map(m => `
+                    <button onclick="window.navigate('${m.id}'); window.toggleMobilePanel();" class="flex flex-col items-center p-3 rounded-xl bg-slate-50 hover:bg-emerald-50 border border-slate-100 transition shadow-sm">
+                        <i data-lucide="${m.icon}" class="w-6 h-6 ${currentRoute === m.id ? 'text-emerald-600' : 'text-slate-400'} mb-2"></i>
+                        <span class="text-xs text-slate-700 text-center leading-tight ${currentRoute === m.id ? 'font-bold text-emerald-700' : ''}">${m.label}</span>
+                    </button>
+                `).join('');
+            }
+
             lucide.createIcons();
         }
 
@@ -152,7 +215,10 @@
             if (route === 'dashboard') renderDashboardPage(container);
             else if (route === 'departments') renderDepartmentsPage(container);
             else if (route === 'vendors') renderVendorsPage(container);
-            else if (route === 'units') renderUnitsPage(container); // 🌟 เพิ่มบรรทัดนี้สำหรับหน้าหน่วยนับ
+            else if (route === 'units') renderUnitsPage(container);
+            else if (route === 'categories') renderCategoriesPage(container);
+            else if (route === 'items') renderItemsPage(container);
+            else if (route === 'procurement') renderProcurementPage(container); // 🌟 เพิ่มบรรทัดนี้
             else renderPlaceholderPage(container, route);
             
             lucide.createIcons();
@@ -871,7 +937,1194 @@
                 }
             });
         }
-	  
+	    
+		// ==========================================
+        // 7. หน้ากลุ่ม/ประเภทพัสดุ (Categories)
+        // ==========================================
+        async function renderCategoriesPage(container) {
+            showLoader();
+            const { data: categories, error } = await supabaseClient.from('supply_categories').select('*').order('id', { ascending: true });
+            hideLoader();
+
+            window.currentCategories = categories || [];
+
+            container.innerHTML = `
+                <div class="mb-6 fade-in flex flex-col md:flex-row md:items-end justify-between gap-4">
+                    <div>
+                        <h2 class="text-2xl font-bold mb-1 flex items-center gap-2 text-emerald-700"><i data-lucide="tags" class="w-6 h-6"></i> กลุ่มครุภัณฑ์ / ประเภทครุภัณฑ์</h2>
+                        <p class="text-slate-500 text-sm">จัดการข้อมูลรหัสกลุ่ม และประเภทย่อยของพัสดุในสถานศึกษา</p>
+                    </div>
+                    <button onclick="window.openCategoryModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl shadow-md transition font-medium flex items-center gap-2 text-sm"><i data-lucide="plus-circle" class="w-4 h-4"></i> เพิ่มข้อมูลใหม่</button>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden fade-in">
+                    <div class="p-4 border-b border-slate-100 flex flex-wrap justify-between items-center gap-4 bg-slate-50">
+                        <div class="flex items-center gap-2 text-slate-600 text-sm font-medium">
+                            แสดง 
+                            <select class="border border-slate-300 rounded-lg px-2 py-1.5 outline-none focus:border-emerald-500 bg-white">
+                                <option>25</option><option>50</option><option>100</option>
+                            </select> 
+                            รายการ
+                        </div>
+                        <div class="relative w-full md:w-auto">
+                            <i data-lucide="search" class="absolute left-3 top-2.5 w-4 h-4 text-slate-400"></i>
+                            <input type="text" id="search_category" onkeyup="window.filterCategories()" placeholder="ค้นหารหัส หรือ ชื่อ..." class="w-full md:w-64 pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition">
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto h-[50vh] overflow-y-auto">
+                        <table class="w-full text-left text-sm whitespace-nowrap">
+                            <thead class="bg-slate-100 text-slate-700 border-b border-slate-200 sticky top-0 z-10">
+                                <tr>
+                                    <th class="p-3 font-semibold text-center w-24">ลำดับ</th>
+                                    <th class="p-3 font-semibold text-center">รหัสกลุ่มวัสดุ/ครุภัณฑ์</th>
+                                    <th class="p-3 font-semibold">ชื่อกลุ่มวัสดุ/ครุภัณฑ์</th>
+                                    <th class="p-3 font-semibold text-center">รหัสประเภทวัสดุ/ครุภัณฑ์</th>
+                                    <th class="p-3 font-semibold">ชื่อประเภทวัสดุ/ครุภัณฑ์</th>
+                                    <th class="p-3 font-semibold text-center w-32">จัดการข้อมูล</th>
+                                </tr>
+                            </thead>
+                            <tbody id="category_table_body" class="divide-y divide-slate-100"></tbody>
+                        </table>
+                    </div>
+
+                    <div class="p-4 border-t border-slate-100 text-sm text-slate-500 flex flex-wrap justify-between items-center bg-white gap-4">
+                        <div id="category_count_info" class="font-medium">แสดง 0 ถึง 0 จาก 0 รายการ</div>
+                    </div>
+                </div>
+
+                <!-- MODAL เพิ่ม/แก้ไขประเภทพัสดุ -->
+                <div id="category-modal" class="hidden fixed inset-0 z-[80] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 fade-in">
+                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
+                        <div class="bg-emerald-600 text-white p-4 flex justify-between items-center shrink-0">
+                            <h3 class="font-bold flex items-center gap-2" id="category_modal_title"><i data-lucide="plus-circle" class="w-5 h-5"></i> เพิ่มข้อมูล</h3>
+                            <button onclick="window.closeCategoryModal()" class="text-white hover:bg-white/20 p-1 rounded-lg transition"><i data-lucide="x" class="w-5 h-5"></i></button>
+                        </div>
+                        
+                        <div class="p-6 overflow-y-auto space-y-4 flex-1">
+                            <input type="hidden" id="c_id">
+                            
+                            <div>
+                                <label class="block text-sm font-bold text-slate-700 mb-1">ประเภท <span class="text-red-500">*</span></label>
+                                <select id="c_main_type" onchange="window.updateGroupOptions()" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 outline-none focus:border-emerald-500 bg-white">
+                                    <option value="วัสดุ">วัสดุ</option>
+                                    <option value="ครุภัณฑ์">ครุภัณฑ์</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-bold text-slate-700 mb-1">รหัสกลุ่มวัสดุ/ครุภัณฑ์ <span class="text-red-500">*</span></label>
+                                <input type="text" id="c_group_code" placeholder="ตัวอย่าง: 001" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 outline-none focus:border-emerald-500">
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-bold text-slate-700 mb-1">ชื่อกลุ่มวัสดุ/ครุภัณฑ์ <span class="text-red-500">*</span></label>
+                                <select id="c_group_name" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 outline-none focus:border-emerald-500 bg-white">
+                                    <!-- ตัวเลือกจะถูกเปลี่ยนอัตโนมัติตาม dropdown ประเภทด้านบน -->
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-bold text-slate-700 mb-1">รหัสประเภทวัสดุ/ครุภัณฑ์ <span class="text-red-500">*</span></label>
+                                <input type="text" id="c_category_code" placeholder="ตัวอย่าง: 001" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 outline-none focus:border-emerald-500">
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-bold text-slate-700 mb-1">ชื่อประเภทวัสดุ/ครุภัณฑ์ <span class="text-red-500">*</span></label>
+                                <input type="text" id="c_category_name" placeholder="ตัวอย่าง: วัสดุคงทน" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 outline-none focus:border-emerald-500">
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-50 p-4 border-t border-slate-100 flex justify-end gap-2 shrink-0">
+                            <button onclick="window.saveCategory()" class="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-2.5 rounded-xl font-medium shadow-md transition flex items-center gap-2">บันทึกข้อมูล</button>
+                            <button onclick="window.closeCategoryModal()" class="bg-rose-500 hover:bg-rose-600 text-white px-5 py-2.5 rounded-xl font-medium transition shadow-md">ปิดหน้าต่าง</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            window.renderCategoryTable(window.currentCategories);
+            window.updateGroupOptions(); 
+            lucide.createIcons();
+        }
+
+        window.renderCategoryTable = (data) => {
+            const tbody = document.getElementById('category_table_body');
+            let html = '';
+            if(data.length === 0) {
+                html = `<tr><td colspan="6" class="p-8 text-center text-slate-400">ไม่พบข้อมูล</td></tr>`;
+            } else {
+                data.forEach((d, i) => {
+                    html += `
+                        <tr class="hover:bg-emerald-50/50 transition">
+                            <td class="p-3 text-center text-slate-500">${i+1}</td>
+                            <td class="p-3 text-center font-medium text-slate-700">${d.group_code}</td>
+                            <td class="p-3 text-slate-800">${d.group_name}</td>
+                            <td class="p-3 text-center font-medium text-slate-700">${d.category_code}</td>
+                            <td class="p-3 text-slate-800">${d.category_name}</td>
+                            <td class="p-3 text-center">
+                                <div class="flex items-center justify-center gap-2">
+                                    <button onclick="window.openCategoryModal(${d.id})" class="bg-indigo-500 hover:bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition shadow-sm">แก้ไข</button>
+                                    <button onclick="window.deleteCategory(${d.id})" class="bg-rose-500 hover:bg-rose-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition shadow-sm">ลบ</button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                });
+            }
+            tbody.innerHTML = html;
+            const total = data.length;
+            document.getElementById('category_count_info').innerText = `แสดง ${total > 0 ? 1 : 0} ถึง ${total} จาก ${total} รายการ`;
+        }
+
+        window.filterCategories = () => {
+            const text = document.getElementById('search_category').value.toLowerCase();
+            const filtered = window.currentCategories.filter(d => 
+                d.group_code.toLowerCase().includes(text) || 
+                d.group_name.toLowerCase().includes(text) || 
+                d.category_code.toLowerCase().includes(text) || 
+                d.category_name.toLowerCase().includes(text)
+            );
+            window.renderCategoryTable(filtered);
+        }
+
+        window.updateGroupOptions = () => {
+            const mainType = document.getElementById('c_main_type')?.value;
+            const selectEl = document.getElementById('c_group_name');
+            if(!selectEl) return;
+            
+            let options = [];
+            if(mainType === 'วัสดุ') {
+                options = ['วัสดุสำนักงาน', 'วัสดุคอมพิวเตอร์', 'วัสดุงานบ้านงานครัว', 'วัสดุกีฬา', 'วัสดุวิทยาศาสตร์', 'วัสดุการเกษตร', 'วัสดุไฟฟ้าและวิทยุ', 'วัสดุโฆษณาและเผยแพร่', 'ครุภัณฑ์สำนักงาน', 'ครุภัณฑ์การศึกษา', 'ครุภัณฑ์คอมพิวเตอร์', 'ครุภัณฑ์งานบ้านงานครัว'];
+            } else if (mainType === 'ครุภัณฑ์') {
+                options = ['ครุภัณฑ์สำนักงาน', 'ครุภัณฑ์การศึกษา', 'ครุภัณฑ์ยานพาหนะและขนส่ง', 'ครุภัณฑ์การเกษตร', 'ครุภัณฑ์ก่อสร้าง', 'ครุภัณฑ์ไฟฟ้าและวิทยุ', 'ครุภัณฑ์โฆษณาและเผยแพร่', 'ครุภัณฑ์วิทยาศาตร์', 'ครุภัณฑ์งานบ้านงานครัว', 'ครุภัณฑ์โรงงาน', 'ครุภัณฑ์กีฬา', 'ครุภัณฑ์สำรวจ', 'ครุภัณฑ์ดนตรีและนาฎศิลป์', 'ครุภัณฑ์คอมพิวเตอร์หรืออิเล็กทรอนิกส์', 'ครุภัณฑ์สนาม', 'ครุภัณฑ์อื่นๆ'];
+            }
+            
+            selectEl.innerHTML = options.map(opt => `<option value="${opt}">${opt}</option>`).join('');
+        }
+
+        window.openCategoryModal = (id = null) => {
+            document.getElementById('c_id').value = id || '';
+            const title = document.getElementById('category_modal_title');
+            
+            if(id) {
+                title.innerHTML = `<i data-lucide="edit" class="w-5 h-5"></i> แก้ไขข้อมูล`;
+                const c = window.currentCategories.find(x => x.id === id);
+                document.getElementById('c_main_type').value = c.main_type;
+                window.updateGroupOptions();
+                document.getElementById('c_group_code').value = c.group_code;
+                document.getElementById('c_group_name').value = c.group_name;
+                document.getElementById('c_category_code').value = c.category_code;
+                document.getElementById('c_category_name').value = c.category_name;
+            } else {
+                title.innerHTML = `<i data-lucide="plus-circle" class="w-5 h-5"></i> เพิ่มข้อมูล`;
+                document.getElementById('c_main_type').value = 'วัสดุ';
+                window.updateGroupOptions();
+                document.getElementById('c_group_code').value = '';
+                document.getElementById('c_category_code').value = '';
+                document.getElementById('c_category_name').value = '';
+            }
+            
+            document.getElementById('category-modal').classList.remove('hidden');
+            lucide.createIcons();
+        }
+
+        window.closeCategoryModal = () => { document.getElementById('category-modal').classList.add('hidden'); }
+
+        window.saveCategory = async () => {
+            const id = document.getElementById('c_id').value;
+            const payload = {
+                main_type: document.getElementById('c_main_type').value,
+                group_code: document.getElementById('c_group_code').value.trim(),
+                group_name: document.getElementById('c_group_name').value,
+                category_code: document.getElementById('c_category_code').value.trim(),
+                category_name: document.getElementById('c_category_name').value.trim()
+            };
+            
+            if(!payload.group_code || !payload.category_code || !payload.category_name) {
+                return Swal.fire({ icon: 'warning', title: 'แจ้งเตือน', text: 'กรุณากรอกข้อมูลให้ครบถ้วน', confirmButtonColor: '#10b981' });
+            }
+
+            // 🌟 ระบบตรวจสอบรหัสซ้ำ (รหัสกลุ่ม และ รหัสประเภท เดียวกัน)
+            const isDuplicate = window.currentCategories.some(c => 
+                c.id != id && // ต้องไม่ใช่รายการที่กำลังแก้ไขอยู่
+                c.main_type === payload.main_type && 
+                c.group_code === payload.group_code && 
+                c.category_code === payload.category_code
+            );
+
+            if(isDuplicate) {
+                return Swal.fire({ icon: 'error', title: 'พบข้อมูลซ้ำ', text: 'รหัสประเภทพัสดุนี้ มีการใช้งานในรหัสกลุ่มพัสดุนี้แล้วครับ!', confirmButtonColor: '#ef4444' });
+            }
+            
+            showLoader();
+            try {
+                if(id) await supabaseClient.from('supply_categories').update(payload).eq('id', id);
+                else await supabaseClient.from('supply_categories').insert([payload]);
+                
+                hideLoader();
+                Swal.fire({ icon: 'success', title: 'บันทึกข้อมูลสำเร็จ', showConfirmButton: false, timer: 1500 });
+                window.closeCategoryModal();
+                window.navigate('categories');
+            } catch (err) {
+                hideLoader();
+                Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: err.message });
+            }
+        }
+
+        window.deleteCategory = (id) => {
+            Swal.fire({
+                title: 'ยืนยันการลบ?',
+                text: 'หากลบข้อมูลนี้แล้วจะไม่สามารถกู้คืนได้',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#94a3b8',
+                confirmButtonText: 'ลบข้อมูล',
+                cancelButtonText: 'ยกเลิก',
+                reverseButtons: true
+            }).then(async (res) => {
+                if(res.isConfirmed) {
+                    showLoader();
+                    await supabaseClient.from('supply_categories').delete().eq('id', id);
+                    hideLoader();
+                    Swal.fire({ icon: 'success', title: 'ลบข้อมูลสำเร็จ', showConfirmButton: false, timer: 1500 });
+                    window.navigate('categories');
+                }
+            });
+        }
+		
+		// ==========================================
+        // 8. หน้ารายการพัสดุแนบท้าย (Items)
+        // ==========================================
+        async function renderItemsPage(container) {
+            showLoader();
+            // ดึงข้อมูล 3 ตารางพร้อมกัน (รายการพัสดุ, ประเภท, หน่วยนับ)
+            const [itemsRes, catsRes, unitsRes] = await Promise.all([
+                supabaseClient.from('supply_items').select('*').order('id', { ascending: false }),
+                supabaseClient.from('supply_categories').select('*').order('id', { ascending: true }),
+                supabaseClient.from('supply_units').select('name').order('id', { ascending: true })
+            ]);
+            hideLoader();
+
+            window.currentItems = itemsRes.data || [];
+            window.sysCategories = catsRes.data || [];
+            window.sysUnits = unitsRes.data || [];
+
+            container.innerHTML = `
+                <div class="mb-6 fade-in flex flex-col md:flex-row md:items-end justify-between gap-4">
+                    <div>
+                        <h2 class="text-2xl font-bold mb-1 flex items-center gap-2 text-emerald-700"><i data-lucide="package-search" class="w-6 h-6"></i> รายการพัสดุแนบท้ายใบสั่งซื้อ</h2>
+                    </div>
+                    <button onclick="window.openItemModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl shadow-md transition font-medium flex items-center gap-2 text-sm"><i data-lucide="plus-circle" class="w-4 h-4"></i> เพิ่มข้อมูลใหม่</button>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden fade-in">
+                    <div class="p-4 border-b border-slate-100 flex flex-wrap justify-between items-center gap-4 bg-slate-50">
+                        <div class="flex items-center gap-2 text-slate-600 text-sm font-medium">
+                            แสดง 
+                            <select class="border border-slate-300 rounded-lg px-2 py-1.5 outline-none focus:border-emerald-500 bg-white">
+                                <option>25</option><option>50</option><option>100</option>
+                            </select> 
+                            รายการ
+                        </div>
+                        <div class="relative w-full md:w-auto">
+                            <i data-lucide="search" class="absolute left-3 top-2.5 w-4 h-4 text-slate-400"></i>
+                            <input type="text" id="search_item" onkeyup="window.filterItems()" placeholder="ค้นหารหัส หรือ ชื่อพัสดุ..." class="w-full md:w-64 pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition">
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto h-[50vh] overflow-y-auto">
+                        <table class="w-full text-left text-sm whitespace-nowrap">
+                            <thead class="bg-slate-100 text-slate-700 border-b border-slate-200 sticky top-0 z-10">
+                                <tr>
+                                    <th class="p-3 font-semibold text-center w-16">ลำดับ</th>
+                                    <th class="p-3 font-semibold">ประเภทพัสดุ</th>
+                                    <th class="p-3 font-semibold text-center">รหัสพัสดุ</th>
+                                    <th class="p-3 font-semibold">ชื่อพัสดุ</th>
+                                    <th class="p-3 font-semibold text-right">ราคา</th>
+                                    <th class="p-3 font-semibold text-center">จำนวน</th>
+                                    <th class="p-3 font-semibold text-center">หน่วยนับ</th>
+                                    <th class="p-3 font-semibold text-center w-32">จัดการข้อมูล</th>
+                                </tr>
+                            </thead>
+                            <tbody id="item_table_body" class="divide-y divide-slate-100"></tbody>
+                        </table>
+                    </div>
+
+                    <div class="p-4 border-t border-slate-100 text-sm text-slate-500 flex flex-wrap justify-between items-center bg-white gap-4">
+                        <div id="item_count_info" class="font-medium">แสดง 0 ถึง 0 จาก 0 รายการ</div>
+                    </div>
+                </div>
+
+                <!-- MODAL เพิ่ม/แก้ไขพัสดุ -->
+                <div id="item-modal" class="hidden fixed inset-0 z-[80] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 fade-in">
+                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                        <div class="bg-emerald-600 text-white p-4 flex justify-between items-center shrink-0">
+                            <h3 class="font-bold flex items-center gap-2" id="item_modal_title"><i data-lucide="plus-circle" class="w-5 h-5"></i> เพิ่มข้อมูล</h3>
+                            <button onclick="window.closeItemModal()" class="text-white hover:bg-white/20 p-1 rounded-lg transition"><i data-lucide="x" class="w-5 h-5"></i></button>
+                        </div>
+                        
+                        <div class="p-6 overflow-y-auto space-y-4 flex-1 bg-slate-50/50">
+                            <input type="hidden" id="i_id">
+                            
+                            <div>
+                                <label class="block text-sm font-bold text-slate-700 mb-1">กลุ่มครุภัณฑ์/วัสดุ <span class="text-red-500">*</span></label>
+                                <select id="i_group" onchange="window.updateItemFormOptions()" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 outline-none focus:border-emerald-500 bg-white">
+                                    <option value="วัสดุคงทน">วัสดุคงทน</option>
+                                    <option value="วัสดุสิ้นเปลือง">วัสดุสิ้นเปลือง</option>
+                                    <option value="ครุภัณฑ์">ครุภัณฑ์</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-bold text-slate-700 mb-1">ประเภทพัสดุ <span class="text-red-500">*</span></label>
+                                <select id="i_category" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 outline-none focus:border-emerald-500 bg-white">
+                                    <!-- ตัวเลือกดึงจากตาราง categories ตามที่เลือกด้านบน -->
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-bold text-slate-700 mb-1">คำนวณค่าเสื่อมสภาพ</label>
+                                <select id="i_depreciation" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 outline-none focus:border-emerald-500 bg-white disabled:bg-slate-100 disabled:text-slate-400">
+                                    <!-- จะเปิดให้เลือกเฉพาะเมื่อเป็น ครุภัณฑ์ -->
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-bold text-slate-700 mb-1">รหัสพัสดุ <span class="text-red-500">*</span></label>
+                                <input type="text" id="i_code" placeholder="รหัสพัสดุ : ตัวอย่างเช่น 001, A-001 เป็นต้น" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 outline-none focus:border-emerald-500">
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-bold text-slate-700 mb-1">ชื่อพัสดุ <span class="text-red-500">*</span></label>
+                                <input type="text" id="i_name" placeholder="ชื่อพัสดุ : ตัวอย่างเช่น กระดาษ A4 70 แกรม ยี่ห้อ Double A" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 outline-none focus:border-emerald-500">
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-bold text-slate-700 mb-1">ราคาต่อชิ้น <span class="text-red-500">*</span></label>
+                                <input type="number" id="i_price" placeholder="ราคาต่อชิ้น : ตัวอย่างเช่น 500" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 outline-none focus:border-emerald-500">
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-bold text-slate-700 mb-1">จำนวน <span class="text-red-500">*</span></label>
+                                <input type="number" id="i_qty" placeholder="จำนวนเดิมที่มีอยู่แล้วในโรงเรียน ณ ขณะนั้น เช่น 20 เป็นต้น" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 outline-none focus:border-emerald-500">
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-bold text-slate-700 mb-1">หน่วยนับ <span class="text-red-500">*</span></label>
+                                <select id="i_unit" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 outline-none focus:border-emerald-500 bg-white">
+                                    <option value="">กรุณาเลือก</option>
+                                    ${window.sysUnits.map(u => `<option value="${u.name}">${u.name}</option>`).join('')}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="bg-white p-4 border-t border-slate-100 flex justify-end gap-2 shrink-0">
+                            <button onclick="window.saveItem()" class="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-2.5 rounded-xl font-medium shadow-md transition flex items-center gap-2">บันทึกข้อมูล</button>
+                            <button onclick="window.closeItemModal()" class="bg-rose-500 hover:bg-rose-600 text-white px-5 py-2.5 rounded-xl font-medium transition shadow-md">ปิดหน้าต่าง</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            window.renderItemTable(window.currentItems);
+            window.updateItemFormOptions(); // เรียกครั้งแรกเพื่อเตรียมฟอร์ม
+            lucide.createIcons();
+        }
+
+        window.renderItemTable = (data) => {
+            const tbody = document.getElementById('item_table_body');
+            let html = '';
+            if(data.length === 0) {
+                html = `<tr><td colspan="8" class="p-8 text-center text-slate-400">ไม่พบข้อมูลที่ค้นหา</td></tr>`;
+            } else {
+                data.forEach((d, i) => {
+                    html += `
+                        <tr class="hover:bg-slate-50 transition border-b border-slate-50">
+                            <td class="p-3 text-center text-slate-500">${i+1}</td>
+                            <td class="p-3 text-slate-600 text-xs">${d.item_group} <br> <span class="text-slate-400">${d.category_name}</span></td>
+                            <td class="p-3 text-center font-medium text-slate-700">${d.item_code}</td>
+                            <td class="p-3 text-slate-800 font-medium">${d.item_name}</td>
+                            <td class="p-3 text-right text-emerald-600 font-bold">${formatMoney(d.price)}</td>
+                            <td class="p-3 text-center text-slate-600">${d.quantity}</td>
+                            <td class="p-3 text-center text-slate-600">${d.unit_name}</td>
+                            <td class="p-3 text-center">
+                                <div class="flex items-center justify-center gap-2">
+                                    <button onclick="window.openItemModal(${d.id})" class="bg-indigo-500 hover:bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition shadow-sm">แก้ไข</button>
+                                    <button onclick="window.deleteItem(${d.id})" class="bg-rose-500 hover:bg-rose-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition shadow-sm">ลบ</button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                });
+            }
+            tbody.innerHTML = html;
+            const total = data.length;
+            document.getElementById('item_count_info').innerText = `แสดง ${total > 0 ? 1 : 0} ถึง ${total} จาก ${total} รายการ`;
+        }
+
+        window.filterItems = () => {
+            const text = document.getElementById('search_item').value.toLowerCase();
+            const filtered = window.currentItems.filter(d => 
+                d.item_code.toLowerCase().includes(text) || 
+                d.item_name.toLowerCase().includes(text) ||
+                d.category_name.toLowerCase().includes(text)
+            );
+            window.renderItemTable(filtered);
+        }
+
+        // 🌟 ฟังก์ชันจัดการความสัมพันธ์ Dropdown แบบไดนามิก
+        window.updateItemFormOptions = () => {
+            const group = document.getElementById('i_group')?.value;
+            const catSelect = document.getElementById('i_category');
+            const depSelect = document.getElementById('i_depreciation');
+            if(!catSelect || !depSelect) return;
+            
+            // 1. กรองประเภทพัสดุ (อิงจากตาราง Categories ที่ดึงมาตอนโหลดหน้า)
+            const isKaruphan = (group === 'ครุภัณฑ์');
+            const filterMainType = isKaruphan ? 'ครุภัณฑ์' : 'วัสดุ';
+            
+            const filteredCats = window.sysCategories.filter(c => c.main_type === filterMainType);
+            catSelect.innerHTML = filteredCats.map(c => 
+                `<option value="${c.group_name} - ${c.category_name}">${c.group_name} - ${c.category_name}</option>`
+            ).join('');
+
+            // 2. ล็อก/ปลดล็อก ช่องคำนวณค่าเสื่อมสภาพ
+            if(isKaruphan) {
+                depSelect.disabled = false;
+                depSelect.innerHTML = '<option value="">กรุณาเลือก</option><option value="คำนวณค่าเสื่อมสภาพ">คำนวณค่าเสื่อมสภาพ</option><option value="ไม่คำนวณค่าเสื่อมสภาพ">ไม่คำนวณค่าเสื่อมสภาพ</option>';
+            } else {
+                depSelect.disabled = true;
+                depSelect.innerHTML = '<option value="-">-</option>';
+            }
+        }
+
+        window.openItemModal = (id = null) => {
+            document.getElementById('i_id').value = id || '';
+            const title = document.getElementById('item_modal_title');
+            
+            if(id) {
+                title.innerHTML = `<i data-lucide="edit" class="w-5 h-5"></i> แก้ไขข้อมูล`;
+                const item = window.currentItems.find(x => x.id === id);
+                document.getElementById('i_group').value = item.item_group;
+                window.updateItemFormOptions(); // อัปเดต Dropdown ให้ตรงกับ group
+                
+                setTimeout(() => {
+                    document.getElementById('i_category').value = item.category_name;
+                    document.getElementById('i_depreciation').value = item.depreciation || '';
+                }, 50);
+
+                document.getElementById('i_code').value = item.item_code;
+                document.getElementById('i_name').value = item.item_name;
+                document.getElementById('i_price').value = item.price;
+                document.getElementById('i_qty').value = item.quantity;
+                document.getElementById('i_unit').value = item.unit_name;
+            } else {
+                title.innerHTML = `<i data-lucide="plus-circle" class="w-5 h-5"></i> เพิ่มข้อมูลใหม่`;
+                document.getElementById('i_group').value = 'วัสดุคงทน';
+                window.updateItemFormOptions();
+                document.getElementById('i_code').value = '';
+                document.getElementById('i_name').value = '';
+                document.getElementById('i_price').value = '';
+                document.getElementById('i_qty').value = '';
+                document.getElementById('i_unit').value = '';
+            }
+            
+            document.getElementById('item-modal').classList.remove('hidden');
+            lucide.createIcons();
+        }
+
+        window.closeItemModal = () => { document.getElementById('item-modal').classList.add('hidden'); }
+
+        window.saveItem = async () => {
+            const id = document.getElementById('i_id').value;
+            const payload = {
+                item_group: document.getElementById('i_group').value,
+                category_name: document.getElementById('i_category').value,
+                depreciation: document.getElementById('i_depreciation').value,
+                item_code: document.getElementById('i_code').value.trim(),
+                item_name: document.getElementById('i_name').value.trim(),
+                price: parseFloat(document.getElementById('i_price').value) || 0,
+                quantity: parseFloat(document.getElementById('i_qty').value) || 0,
+                unit_name: document.getElementById('i_unit').value
+            };
+            
+            if(!payload.item_code || !payload.item_name || !payload.unit_name || (payload.item_group === 'ครุภัณฑ์' && !payload.depreciation)) {
+                return Swal.fire({ icon: 'warning', title: 'แจ้งเตือน', text: 'กรุณากรอกข้อมูลให้ครบถ้วน', confirmButtonColor: '#10b981' });
+            }
+
+            // 🌟 ตรวจสอบรหัสพัสดุซ้ำ (ตามเงื่อนไขข้อ 4)
+            const isDuplicate = window.currentItems.some(i => i.item_code === payload.item_code && i.id != id);
+            if(isDuplicate) {
+                return Swal.fire({ icon: 'error', title: 'รหัสพัสดุซ้ำ', text: 'ไม่สามารถใช้รหัสนี้ได้ เนื่องจากมีอยู่ในระบบแล้วครับ', confirmButtonColor: '#ef4444' });
+            }
+            
+            showLoader();
+            try {
+                if(id) await supabaseClient.from('supply_items').update(payload).eq('id', id);
+                else await supabaseClient.from('supply_items').insert([payload]);
+                
+                hideLoader();
+                Swal.fire({ icon: 'success', title: 'บันทึกข้อมูลสำเร็จ', showConfirmButton: false, timer: 1500 });
+                window.closeItemModal();
+                window.navigate('items'); 
+            } catch (err) {
+                hideLoader();
+                Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: err.message });
+            }
+        }
+
+        window.deleteItem = (id) => {
+            Swal.fire({
+                title: 'ยืนยันการลบ?',
+                text: 'หากลบข้อมูลนี้แล้วจะไม่สามารถกู้คืนได้',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#94a3b8',
+                confirmButtonText: 'ลบข้อมูล',
+                cancelButtonText: 'ยกเลิก',
+                reverseButtons: true
+            }).then(async (res) => {
+                if(res.isConfirmed) {
+                    showLoader();
+                    await supabaseClient.from('supply_items').delete().eq('id', id);
+                    hideLoader();
+                    Swal.fire({ icon: 'success', title: 'ลบข้อมูลสำเร็จ', showConfirmButton: false, timer: 1500 });
+                    window.navigate('items');
+                }
+            });
+        }
+		
+		// ==========================================
+        // 9. หน้าจัดซื้อ/จัดจ้าง (Procurement)
+        // ==========================================
+        let procActiveTab = 'pending';
+        let procCurrentItems = [];
+        let procCurrentExpenseId = null;
+
+        async function renderProcurementPage(container) {
+            showLoader();
+            const [expRes, procRes, vendorRes, schoolRes] = await Promise.all([
+                supabaseClient.from('expense_requests').select('*').eq('status', 'อนุมัติแล้ว').order('id', { ascending: false }),
+                supabaseClient.from('supply_procurements').select('*').order('id', { ascending: false }),
+                supabaseClient.from('supply_vendors').select('id, vendor_name').order('vendor_name', { ascending: true }),
+                supabaseClient.from('school_info').select('academic_year').limit(1).single()
+            ]);
+            hideLoader();
+
+            const expenses = expRes.data || [];
+            const procurements = procRes.data || [];
+            window.sysVendors = vendorRes.data || [];
+            window.sysAcademicYear = schoolRes.data?.academic_year || '2570';
+
+            const procExpIds = procurements.map(p => p.expense_request_id);
+            
+            // 🌟 แก้ไข: กรองเอาเฉพาะ "ซื้อวัสดุ" และ "จัดจ้าง" เท่านั้น ที่จะเด้งมาโชว์ในระบบพัสดุ
+            window.procPendingList = expenses.filter(e => 
+                !procExpIds.includes(e.id) && 
+                (e.expense_type === 'ซื้อวัสดุ' || e.expense_type === 'จัดจ้าง')
+            );
+            
+            window.procBuyList = procurements.filter(p => p.procurement_type === 'ซื้อ');
+            window.procHireList = procurements.filter(p => p.procurement_type === 'จ้าง');
+
+            container.innerHTML = `
+                <div class="mb-6 fade-in flex flex-col md:flex-row md:items-end justify-between gap-4">
+                    <div>
+                        <h2 class="text-2xl font-bold mb-1 flex items-center gap-2 text-indigo-700"><i data-lucide="shopping-bag" class="w-6 h-6"></i> รายการจัดซื้อจัดจ้าง</h2>
+                        <p class="text-slate-500 text-sm">จัดการเอกสาร ดึงข้อมูลจากใบขอเบิกเพื่อสร้างทะเบียนจัดซื้อจัดจ้าง</p>
+                    </div>
+                    <div class="flex gap-2 bg-slate-100 p-1 rounded-xl">
+                        <button onclick="window.changeProcTab('pending')" class="px-4 py-2 rounded-lg text-sm font-bold transition ${procActiveTab === 'pending' ? 'bg-white text-indigo-600 shadow' : 'text-slate-500 hover:text-slate-700'}">รอทำเอกสาร <span class="bg-red-500 text-white px-1.5 py-0.5 rounded-full text-[10px] ml-1">${window.procPendingList.length}</span></button>
+                        <button onclick="window.changeProcTab('buy')" class="px-4 py-2 rounded-lg text-sm font-bold transition ${procActiveTab === 'buy' ? 'bg-cyan-500 text-white shadow' : 'text-slate-500 hover:text-slate-700'}">ทะเบียนคุมจัดซื้อ</button>
+                        <button onclick="window.changeProcTab('hire')" class="px-4 py-2 rounded-lg text-sm font-bold transition ${procActiveTab === 'hire' ? 'bg-rose-500 text-white shadow' : 'text-slate-500 hover:text-slate-700'}">ทะเบียนคุมจัดจ้าง</button>
+                    </div>
+                </div>
+                <div id="proc_content_area" class="fade-in"></div>
+
+                <!-- MODAL ฟอร์มจัดซื้อ/จัดจ้าง (8 ส่วน) -->
+                <div id="proc-modal" class="hidden fixed inset-0 z-[80] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-2 md:p-6 fade-in">
+                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-6xl flex flex-col max-h-full overflow-hidden">
+                        <div class="bg-indigo-600 text-white p-4 flex justify-between items-center shrink-0">
+                            <h3 class="font-bold flex items-center gap-2" id="proc_modal_title"><i data-lucide="file-plus" class="w-5 h-5"></i> บันทึกข้อมูลจัดซื้อ/จัดจ้าง</h3>
+                            <button onclick="window.closeProcModal()" class="text-white hover:bg-white/20 p-1.5 rounded-lg transition"><i data-lucide="x" class="w-5 h-5"></i></button>
+                        </div>
+                        
+                        <div class="p-4 md:p-6 overflow-y-auto space-y-6 flex-1 bg-slate-50 text-sm" id="proc_form_body">
+                            <!-- ฟอร์มจะถูกสร้างด้วย JS -->
+                        </div>
+
+                        <div class="bg-white p-4 border-t border-slate-200 flex justify-end gap-3 shrink-0">
+                            <button onclick="window.closeProcModal()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-6 py-2.5 rounded-xl font-medium transition shadow-sm">ยกเลิก</button>
+                            <button onclick="window.saveProcurement()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-2.5 rounded-xl font-medium shadow-md transition flex items-center gap-2"><i data-lucide="save" class="w-4 h-4"></i> บันทึกข้อมูล</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            window.renderProcTabContent();
+            lucide.createIcons();
+        }
+
+        window.changeProcTab = (tab) => { procActiveTab = tab; window.navigate('procurement'); }
+
+       window.renderProcTabContent = () => {
+            const area = document.getElementById('proc_content_area');
+            let tableHtml = '';
+
+            if (procActiveTab === 'pending') {
+                window.procPendingList.forEach((req, i) => {
+                    tableHtml += `
+                        <tr class="hover:bg-slate-50 border-b border-slate-100 bg-white">
+                            <td class="p-3 text-center text-slate-500">${i+1}</td>
+                            <td class="p-3 font-medium text-blue-700">${req.request_code}</td>
+                            <td class="p-3 text-slate-700">${req.project_name}</td>
+                            <td class="p-3 text-slate-600">${req.requester_name}</td>
+                            <td class="p-3 text-right font-bold text-red-500">${formatMoney(req.total_amount)}</td>
+                            <td class="p-3 text-center">
+                                <button onclick="window.openProcModal(${req.id})" class="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold transition shadow-sm flex items-center justify-center gap-1 mx-auto"><i data-lucide="file-edit" class="w-3 h-3"></i> ทำเอกสารซื้อ/จ้าง</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+                area.innerHTML = buildTableLayout('รอจัดทำเอกสารจัดซื้อ/จัดจ้าง', ['ลำดับ', 'รหัสใบเบิก', 'โครงการ', 'ผู้ขอเบิก', 'ยอดรวม (บาท)', 'จัดการ'], tableHtml, 'ยังไม่มีรายการรอจัดทำเอกสาร');
+            } else if (procActiveTab === 'buy' || procActiveTab === 'hire') {
+                const list = procActiveTab === 'buy' ? window.procBuyList : window.procHireList;
+                const color = procActiveTab === 'buy' ? 'text-cyan-700' : 'text-rose-700';
+                list.forEach((p, i) => {
+                    tableHtml += `
+                        <tr class="hover:bg-slate-50 border-b border-slate-100 bg-white">
+                            <td class="p-3 font-bold ${color}">${p.po_number}</td>
+                            <td class="p-3 text-slate-600">${p.po_date || '-'}</td>
+                            <td class="p-3 text-slate-800">${p.subject_name}</td>
+                            <td class="p-3 text-right font-bold text-slate-700">${formatMoney(p.budget_amount)}</td>
+                            <td class="p-3 text-center">
+                                <div class="flex items-center justify-center gap-2">
+                                    <button onclick="window.openProcModal(${p.expense_request_id}, ${p.id})" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-600 border border-indigo-200 px-3 py-1.5 rounded-lg text-xs font-bold transition shadow-sm"><i data-lucide="edit" class="w-3.5 h-3.5 inline"></i> ดู/แก้ไข</button>
+                                    <button onclick="window.printProcurement(${p.id})" class="bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition shadow-sm flex items-center gap-1"><i data-lucide="printer" class="w-3.5 h-3.5"></i> พิมพ์เอกสาร</button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                });
+                area.innerHTML = buildTableLayout(procActiveTab === 'buy' ? 'ทะเบียนคุมจัดซื้อ' : 'ทะเบียนคุมจัดจ้าง', ['เลขที่คำสั่ง', 'วันที่', 'รายการ', 'ยอดรวม (บาท)', 'จัดการ'], tableHtml, 'ยังไม่มีประวัติข้อมูล');
+            }
+            lucide.createIcons();
+        }
+
+        function buildTableLayout(title, headers, bodyHtml, emptyText) {
+            let thead = headers.map(h => `<th class="p-3 font-semibold ${h==='ยอดรวม (บาท)'?'text-right': h==='จัดการ'?'text-center':''}">${h}</th>`).join('');
+            if(!bodyHtml) bodyHtml = `<tr><td colspan="${headers.length}" class="p-8 text-center text-slate-400">${emptyText}</td></tr>`;
+            return `
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="p-4 bg-slate-50 border-b border-slate-200 font-bold text-slate-700 flex items-center gap-2"><i data-lucide="list" class="w-4 h-4"></i> ${title}</div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left whitespace-nowrap text-sm">
+                            <thead class="bg-slate-100 text-slate-600 border-b border-slate-200"><tr>${thead}</tr></thead>
+                            <tbody class="divide-y divide-slate-100">${bodyHtml}</tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        }
+
+        const pInput = (label, id, type='text', extra='') => `<div><label class="block text-xs font-bold text-slate-700 mb-1">${label}</label><input type="${type}" id="${id}" class="w-full border border-slate-300 rounded-lg px-3 py-2 outline-none focus:border-indigo-500 bg-white" ${extra}></div>`;
+        
+        window.openProcModal = async (expenseId, editId = null) => {
+            procCurrentExpenseId = expenseId;
+            const exp = (window.procPendingList.find(e => e.id === expenseId)) || await supabaseClient.from('expense_requests').select('*').eq('id', expenseId).single().then(res => res.data);
+            if(!exp) return;
+
+            let data = {};
+            if(editId) {
+                data = await supabaseClient.from('supply_procurements').select('*').eq('id', editId).single().then(res => res.data);
+            }
+
+            const getVal = (field, fallback) => data[field] !== undefined && data[field] !== null ? data[field] : fallback;
+            const today = new Date().toISOString().split('T')[0];
+
+            procCurrentItems = getVal('items', exp.items) || [];
+
+            let vendorOptions = '<option value="">- เลือกผู้ขาย/ผู้รับจ้าง -</option>';
+            window.sysVendors.forEach(v => {
+                vendorOptions += `<option value="${v.id}" ${getVal('vendor_id', '') == v.id ? 'selected' : ''}>${v.vendor_name}</option>`;
+            });
+
+            const fileDisplay = exp.file_url ? `<a href="${exp.file_url}" target="_blank" class="text-xs bg-indigo-50 text-indigo-600 border border-indigo-200 px-3 py-1.5 rounded-lg font-bold hover:bg-indigo-100 transition inline-flex items-center gap-1 mb-2"><i data-lucide="paperclip" class="w-3.5 h-3.5"></i> ดูไฟล์แนบจากใบขอเบิก</a>` : `<span class="text-xs text-slate-400">ไม่มีไฟล์แนบจากใบขอเบิก</span>`;
+
+            // 🌟 แก้ไข: ให้ระบบดึงค่าเริ่มต้น ซื้อ หรือ จ้าง ตามที่ผู้ใช้ติ๊กมาจากระบบแผน
+            const defaultProcType = exp.expense_type === 'จัดจ้าง' ? 'จ้าง' : 'ซื้อ';
+
+            document.getElementById('proc_form_body').innerHTML = `
+                <input type="hidden" id="p_id" value="${editId || ''}">
+                <input type="hidden" id="p_file_url" value="${exp.file_url || ''}">
+
+                <div class="mb-2 text-right">${fileDisplay}</div>
+
+                <!-- ส่วนที่ 1 -->
+                <div class="bg-white border border-blue-200 rounded-xl overflow-hidden shadow-sm">
+                    <div class="bg-blue-50 p-2.5 border-b border-blue-200 text-blue-800 font-bold text-sm">ส่วนที่ 1 ข้อมูลรายงานขอซื้อ/จ้าง</div>
+                    <div class="p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                        ${pInput('ปีงบประมาณ', 'p_year', 'text', `value="${getVal('academic_year', window.sysAcademicYear)}" oninput="window.previewPoNumber()"`)}
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">ประเภทของงาน</label>
+                            <select id="p_type" class="w-full border border-slate-300 rounded-lg px-3 py-2 outline-none focus:border-indigo-500 bg-white" onchange="window.previewPoNumber(); window.togglePart8();">
+                                <option value="ซื้อ" ${getVal('procurement_type', defaultProcType) === 'ซื้อ' ? 'selected' : ''}>ซื้อ</option>
+                                <option value="จ้าง" ${getVal('procurement_type', defaultProcType) === 'จ้าง' ? 'selected' : ''}>จ้าง</option>
+                            </select>
+                        </div>
+                        ${pInput('วันที่บันทึกรายงาน', 'p_report_date', 'date', `value="${getVal('report_date', exp.doc_date || today)}"`)}
+                        <div class="md:col-span-2">${pInput('ชื่อรายการที่จะซื้อ/จ้าง', 'p_subject', 'text', `value="${getVal('subject_name', '')}"`)}</div>
+                        ${pInput('เหตุผล', 'p_reason', 'text', `value="${getVal('reason', '')}" onkeyup="document.getElementById('p_req_reason').value = this.value"`)}
+                        ${pInput('แผนงาน/โครงการ', 'p_project', 'text', `value="${getVal('project_name', exp.project_name)}" readonly class="bg-slate-50"`)}
+                        ${pInput('กลุ่มงาน', 'p_dep', 'text', `value="${getVal('department_name', exp.department_id)}" readonly class="bg-slate-50"`)}
+                        ${pInput('งบประมาณ (บาท)', 'p_budget', 'number', `value="${getVal('budget_amount', exp.total_amount)}" readonly class="bg-slate-50 font-bold text-red-500"`)}
+                        ${pInput('กำหนดส่งมอบ(วัน)', 'p_del_days', 'number', `value="${getVal('delivery_days', '')}"`)}
+                        ${pInput('กรรมการตรวจรับ (คนที่ 1)', 'p_c1', 'text', `value="${getVal('comm_1', exp.comm_president || '')}"`)}
+                        ${pInput('กรรมการตรวจรับ (คนที่ 2)', 'p_c2', 'text', `value="${getVal('comm_2', exp.comm_1 || '')}"`)}
+                        ${pInput('กรรมการตรวจรับ (คนที่ 3)', 'p_c3', 'text', `value="${getVal('comm_3', exp.comm_2 || '')}"`)}
+                        ${pInput('วันที่คำสั่งแต่งตั้ง', 'p_order_date', 'date', `value="${getVal('order_date', exp.doc_date || today)}"`)}
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div class="bg-white border border-amber-200 rounded-xl overflow-hidden shadow-sm">
+                        <div class="bg-amber-50 p-2.5 border-b border-amber-200 text-amber-800 font-bold text-sm">ส่วนที่ 2 ข้อมูลใบเสนอราคา</div>
+                        <div class="p-4 space-y-3">
+                            ${pInput('วันที่ในใบเสนอราคา', 'p_q_date', 'date', `value="${getVal('quotation_date', today)}"`)}
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-1">ผู้รับจ้าง/ผู้ขาย</label>
+                                <select id="p_v_id" class="w-full border border-slate-300 rounded-lg px-3 py-2 outline-none focus:border-indigo-500 bg-white">
+                                    ${vendorOptions}
+                                </select>
+                            </div>
+                            ${pInput('ราคาที่เสนอ (บาท)', 'p_q_price', 'number', `value="${getVal('quotation_price', exp.total_amount)}"`)}
+                            <div class="flex gap-4">
+                                <div class="flex-1">${pInput('อายุใบเสนอราคา(วัน)', 'p_q_age', 'number', `value="${getVal('quotation_age', '30')}"`)}</div>
+                                <div class="flex-1">${pInput('ระยะเวลาส่งมอบ(วัน)', 'p_v_del_dur', 'number', `value="${getVal('delivery_duration', '')}"`)}</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <div class="bg-white border border-emerald-200 rounded-xl overflow-hidden shadow-sm">
+                            <div class="bg-emerald-50 p-2.5 border-b border-emerald-200 text-emerald-800 font-bold text-sm">ส่วนที่ 3 ข้อมูลประกาศผู้ชนะ</div>
+                            <div class="p-4">${pInput('วันที่ประกาศผู้ชนะ', 'p_win_date', 'date', `value="${getVal('winner_date', exp.doc_date || today)}"`)}</div>
+                        </div>
+                        <div class="bg-white border border-indigo-200 rounded-xl overflow-hidden shadow-sm">
+                            <div class="bg-indigo-50 p-2.5 border-b border-indigo-200 text-indigo-800 font-bold text-sm">ส่วนที่ 4 ผลการพิจารณาและอนุมัติสั่งซื้อ/จ้าง</div>
+                            <div class="p-4">${pInput('วันที่บันทึกข้อความรายงานพิจารณาฯ', 'p_app_date', 'date', `value="${getVal('approval_date', exp.doc_date || today)}"`)}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div class="bg-white border border-slate-300 rounded-xl p-4 shadow-sm">
+                        <h4 class="font-bold text-slate-800 text-sm mb-3">ส่วนที่ 5 ข้อมูลใบสั่งซื้อ/จ้าง</h4>
+                        ${pInput('เลขที่คำสั่งซื้อ/จ้าง (รันอัตโนมัติ)', 'p_po_num', 'text', `value="${getVal('po_number', '')}" readonly class="bg-slate-100 font-bold text-blue-600"`)}
+                        <div class="mt-3">${pInput('วันที่ใบสั่งซื้อ/จ้าง', 'p_po_date', 'date', `value="${getVal('po_date', exp.doc_date || today)}"`)}</div>
+                    </div>
+                    <div class="bg-white border border-slate-300 rounded-xl p-4 shadow-sm lg:col-span-2">
+                        <h4 class="font-bold text-slate-800 text-sm mb-3">ส่วนที่ 6 ข้อมูลใบตรวจรับ</h4>
+                        <div class="grid grid-cols-2 gap-3">
+                            ${pInput('วันที่ครบกำหนดส่งมอบ', 'p_due_date', 'date', `value="${getVal('due_date', '')}"`)}
+                            ${pInput('วันที่ส่งมอบ', 'p_del_date', 'date', `value="${getVal('delivery_date', '')}"`)}
+                            ${pInput('ส่งงานเกินกำหนด(วัน)', 'p_late_days', 'number', `value="${getVal('late_days', '0')}"`)}
+                            ${pInput('วันที่ตรวจรับงาน', 'p_insp_date', 'date', `value="${getVal('inspection_date', '')}"`)}
+                        </div>
+                    </div>
+                    <div class="bg-white border border-slate-300 rounded-xl p-4 shadow-sm">
+                        <h4 class="font-bold text-slate-800 text-sm mb-3">ส่วนที่ 7 บันทึกรายงานผล</h4>
+                        ${pInput('วันที่บันทึกรายงานผล', 'p_note_date', 'date', `value="${getVal('report_note_date', '')}"`)}
+                    </div>
+                </div>
+
+                <div id="part8_container" class="bg-white border border-pink-200 rounded-xl overflow-hidden shadow-sm transition-all duration-300">
+                    <div class="bg-pink-50 p-2.5 border-b border-pink-200 text-pink-800 font-bold text-sm">ส่วนที่ 8 การสร้างใบเบิกพัสดุ (เชื่อมโยงอัตโนมัติ)</div>
+                    <div class="p-4 grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">สร้างใบเบิกอัตโนมัติ</label>
+                            <select id="p_req_auto" class="w-full border border-slate-300 rounded-lg px-3 py-2 outline-none focus:border-indigo-500">
+                                <option value="ต้องการ" ${getVal('auto_requisition', 'ต้องการ') === 'ต้องการ' ? 'selected' : ''}>ต้องการ</option>
+                                <option value="ไม่ต้องการ" ${getVal('auto_requisition', '') === 'ไม่ต้องการ' ? 'selected' : ''}>ไม่ต้องการ</option>
+                            </select>
+                        </div>
+                        ${pInput('ผู้เบิกพัสดุ', 'p_req_name', 'text', `value="${getVal('requester_name', exp.requester_name)}"`)}
+                        ${pInput('วันที่ใบเบิกพัสดุ', 'p_req_date', 'date', `value="${getVal('requisition_date', today)}"`)}
+                        ${pInput('เหตุผลขอเบิก', 'p_req_reason', 'text', `value="${getVal('requisition_reason', getVal('reason', ''))}" readonly class="bg-slate-50"`)}
+                    </div>
+                </div>
+
+                <!-- รายการวัสดุ/ครุภัณฑ์ -->
+                <div class="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                    <div class="bg-slate-100 p-2.5 border-b border-slate-200 font-bold text-slate-700 text-sm flex justify-between items-center">
+                        <div><i data-lucide="list" class="w-4 h-4 inline mr-1"></i> รายการที่จัดซื้อ/จัดจ้าง</div>
+                    </div>
+                    <div class="overflow-x-auto p-2">
+                        <table class="w-full text-left whitespace-nowrap">
+                            <thead class="text-xs text-slate-600 bg-slate-50 border-b border-slate-200">
+                                <tr>
+                                    <th class="p-2 font-bold w-1/2">ชื่อรายการ</th>
+                                    <th class="p-2 font-bold text-right w-24">ราคา/หน่วย</th>
+                                    <th class="p-2 font-bold text-right w-20">จำนวน</th>
+                                    <th class="p-2 font-bold text-right w-32">รวม (บาท)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="proc_items_tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+
+            window.renderProcItems();
+            
+            window.togglePart8(); 
+
+            if(!editId) window.previewPoNumber();
+            document.getElementById('proc-modal').classList.remove('hidden');
+            lucide.createIcons();
+        }
+
+        // 🌟 ฟังก์ชันใหม่สำหรับซ่อน/แสดง ส่วนที่ 8 
+        window.togglePart8 = () => {
+            const type = document.getElementById('p_type')?.value;
+            const part8 = document.getElementById('part8_container');
+            if (part8) {
+                if (type === 'จ้าง') {
+                    part8.classList.add('hidden');
+                } else {
+                    part8.classList.remove('hidden');
+                }
+            }
+        }
+
+        window.previewPoNumber = async () => {
+            if (document.getElementById('p_id').value) return; // ถ้าเป็นการแก้ไขไม่ต้องรันเลขใหม่
+            const type = document.getElementById('p_type').value;
+            const year = document.getElementById('p_year').value;
+            
+            if(type && year) {
+                // หารายการทั้งหมดในปีนั้นและประเภทนั้นเพื่อรันเลข
+                const { count } = await supabaseClient.from('supply_procurements')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('procurement_type', type)
+                    .eq('academic_year', year);
+                
+                const nextNum = (count || 0) + 1;
+                document.getElementById('p_po_num').value = String(nextNum).padStart(3, '0') + '/' + year;
+            }
+        }
+
+        window.updateProcItem = (itemId, field, value) => {
+            const it = procCurrentItems.find(i => i.id === itemId);
+            if(it) {
+                it[field] = value;
+                const total = (parseFloat(it.qty)||0) * (parseFloat(it.price)||0);
+                document.getElementById(`pi_tot_${itemId}`).innerText = formatMoney(total);
+                
+                // 🌟 อัปเดตยอดเงินรวมทั้งหมดในฟอร์มแบบ Real-time
+                const newGrandTotal = procCurrentItems.reduce((sum, item) => sum + ((parseFloat(item.qty)||0) * (parseFloat(item.price)||0)), 0);
+                if (document.getElementById('p_budget')) document.getElementById('p_budget').value = newGrandTotal;
+                if (document.getElementById('p_q_price')) document.getElementById('p_q_price').value = newGrandTotal;
+            }
+        }
+
+        window.renderProcItems = () => {
+            let html = '';
+            procCurrentItems.forEach(it => {
+                const total = (parseFloat(it.qty)||0) * (parseFloat(it.price)||0);
+                html += `
+                    <tr class="border-b border-slate-100">
+                        <td class="p-1"><input type="text" value="${it.name||''}" oninput="window.updateProcItem(${it.id}, 'name', this.value)" class="w-full border border-slate-200 rounded p-1.5 text-xs outline-none"></td>
+                        <td class="p-1"><input type="number" value="${it.price||''}" oninput="window.updateProcItem(${it.id}, 'price', this.value)" class="w-full border border-slate-200 rounded p-1.5 text-xs text-right outline-none"></td>
+                        <td class="p-1"><input type="number" value="${it.qty||''}" oninput="window.updateProcItem(${it.id}, 'qty', this.value)" class="w-full border border-slate-200 rounded p-1.5 text-xs text-center outline-none"></td>
+                        <td class="p-2 text-right text-xs font-bold text-slate-700" id="pi_tot_${it.id}">${formatMoney(total)}</td>
+                    </tr>
+                `;
+            });
+            document.getElementById('proc_items_tbody').innerHTML = html;
+        }
+
+        window.closeProcModal = () => { document.getElementById('proc-modal').classList.add('hidden'); }
+
+        window.saveProcurement = async () => {
+            const id = document.getElementById('p_id').value;
+            
+            // 🌟 คำนวณยอดรวมล่าสุดเผื่อมีการแก้ไขรายการวัสดุ
+            const newTotalAmount = procCurrentItems.reduce((sum, item) => sum + ((parseFloat(item.qty)||0) * (parseFloat(item.price)||0)), 0);
+
+            const payload = {
+                expense_request_id: procCurrentExpenseId,
+                academic_year: document.getElementById('p_year').value,
+                procurement_type: document.getElementById('p_type').value,
+                report_date: document.getElementById('p_report_date').value || null,
+                subject_name: document.getElementById('p_subject').value,
+                reason: document.getElementById('p_reason').value,
+                project_name: document.getElementById('p_project').value,
+                department_name: document.getElementById('p_dep').value,
+                budget_amount: newTotalAmount, // ใช้ยอดที่คำนวณใหม่
+                delivery_days: document.getElementById('p_del_days').value || null,
+                comm_1: document.getElementById('p_c1').value,
+                comm_2: document.getElementById('p_c2').value,
+                comm_3: document.getElementById('p_c3').value,
+                order_date: document.getElementById('p_order_date').value || null,
+                quotation_date: document.getElementById('p_q_date').value || null,
+                vendor_id: document.getElementById('p_v_id').value || null,
+                quotation_price: document.getElementById('p_q_price').value || null,
+                quotation_age: document.getElementById('p_q_age').value || null,
+                delivery_duration: document.getElementById('p_v_del_dur').value || null,
+                winner_date: document.getElementById('p_win_date').value || null,
+                approval_date: document.getElementById('p_app_date').value || null,
+                po_number: document.getElementById('p_po_num').value,
+                po_date: document.getElementById('p_po_date').value || null,
+                due_date: document.getElementById('p_due_date').value || null,
+                delivery_date: document.getElementById('p_del_date').value || null,
+                late_days: document.getElementById('p_late_days').value || null,
+                inspection_date: document.getElementById('p_insp_date').value || null,
+                report_note_date: document.getElementById('p_note_date').value || null,
+                auto_requisition: document.getElementById('p_req_auto').value,
+                requester_name: document.getElementById('p_req_name').value,
+                requisition_date: document.getElementById('p_req_date').value || null,
+                requisition_reason: document.getElementById('p_req_reason').value,
+                items: procCurrentItems,
+                file_url: document.getElementById('p_file_url').value
+            };
+
+            if(!payload.subject_name || !payload.vendor_id) {
+                return Swal.fire({ icon: 'warning', text: 'กรุณากรอกชื่อรายการ และเลือกผู้ขาย/ผู้รับจ้าง' });
+            }
+
+            showLoader();
+            try {
+                // 1. บันทึกลงตารางจัดซื้อ/จัดจ้างของฝั่งพัสดุ
+                if(id) await supabaseClient.from('supply_procurements').update(payload).eq('id', id);
+                else await supabaseClient.from('supply_procurements').insert([payload]);
+                
+                // 🌟 2. อัปเดตรายการพัสดุและยอดเงิน กลับไปที่ใบขอเบิกฝั่งแผนงบประมาณ
+                await supabaseClient.from('expense_requests').update({
+                    items: procCurrentItems,
+                    total_amount: newTotalAmount
+                }).eq('id', procCurrentExpenseId);
+                
+                hideLoader();
+                Swal.fire({ icon: 'success', title: 'บันทึกสำเร็จ', text: 'อัปเดตข้อมูลกลับไปยังระบบแผนเรียบร้อยแล้ว', showConfirmButton: false, timer: 2000 });
+                window.closeProcModal();
+                window.navigate('procurement');
+            } catch(e) {
+                hideLoader();
+                Swal.fire({ icon: 'error', text: e.message });
+            }
+        }
+		
+		// ==========================================
+        // 10. ระบบแปลงตัวเลขเป็นอักษรไทย & พิมพ์เอกสาร Word
+        // ==========================================
+		const ThaiBaht = (amountStr) => {
+            const num = parseFloat(amountStr || 0).toFixed(2);
+            if (num === '0.00') return 'ศูนย์บาทถ้วน';
+            const parts = num.split('.');
+            let baht = parts[0], satang = parts[1];
+            const text = ['ศูนย์', 'หนึ่ง', 'สอง', 'สาม', 'สี่', 'ห้า', 'หก', 'เจ็ด', 'แปด', 'เก้า'];
+            const unit = ['', 'สิบ', 'ร้อย', 'พัน', 'หมื่น', 'แสน', 'ล้าน'];
+            const convert = (n) => {
+                let res = '';
+                for (let i = 0; i < n.length; i++) {
+                    const digit = parseInt(n[i]);
+                    if (digit !== 0) {
+                        if (i === n.length - 1 && digit === 1 && n.length > 1 && n[i-1] != '0') res += 'เอ็ด';
+                        else if (i === n.length - 2 && digit === 2) res += 'ยี่';
+                        else if (i === n.length - 2 && digit === 1) res += '';
+                        else res += text[digit];
+                        res += unit[n.length - 1 - i];
+                    }
+                }
+                return res;
+            };
+            let result = convert(baht) + 'บาท';
+            if (satang === '00') result += 'ถ้วน';
+            else result += convert(satang) + 'สตางค์';
+            return result;
+        };
+
+       window.printProcurement = async (procId) => {
+            showLoader();
+            const { data: procData } = await supabaseClient.from('supply_procurements').select('*').eq('id', procId).single();
+            const p = procData;
+
+            // 🌟 เพิ่มการดึงข้อมูลตาราง app_users เพื่อเอาตำแหน่งมาใช้
+            const [tplRes, schoolRes, vRes, userRes] = await Promise.all([
+                supabaseClient.from('templates').select('*').order('id', {ascending: false}),
+                supabaseClient.from('school_info').select('*').limit(1).single(),
+                supabaseClient.from('supply_vendors').select('*').eq('id', p.vendor_id || 0).single(),
+                supabaseClient.from('app_users').select('name, position')
+            ]);
+            hideLoader();
+
+            const tpls = tplRes.data || [];
+            const users = userRes.data || [];
+            
+            // 🌟 ฟังก์ชันช่วยค้นหาตำแหน่งจากชื่อ
+            const getPosition = (name) => {
+                if (!name) return '.........................';
+                const u = users.find(u => u.name.trim() === name.trim());
+                return u && u.position ? u.position : '.........................';
+            };
+            
+            const rawAmt = p.budget_amount || 0;
+            const amt = parseFloat(String(rawAmt).replace(/,/g, '')) || 0;
+            const keyword1 = p.procurement_type === 'ซื้อ' ? 'ซื้อ' : 'จ้าง';
+            const isOver5000 = amt > 5000;
+            
+            const matchedTpl = tpls.find(t => {
+                const tName = String(t.name).replace(/\s+/g, '');
+                const hasType = tName.includes(keyword1);
+                if (!hasType) return false;
+                
+                if (isOver5000) {
+                    return tName.includes('เกิน') && !tName.includes('ไม่เกิน');
+                } else {
+                    return tName.includes('ไม่เกิน');
+                }
+            });
+
+            if (!matchedTpl) return Swal.fire({ icon: 'error', title: 'ไม่พบแบบฟอร์ม', text: `ระบบต้องการแบบฟอร์มที่มีคำว่า "${keyword1}" และ "เกิน/ไม่เกิน" ในชื่อไฟล์ (เมนู Template)` });
+
+            const { value: formValues } = await Swal.fire({
+                title: 'พิมพ์เอกสารจัดซื้อ/จัดจ้าง',
+                html: `
+                    <div class="text-left space-y-4">
+                        <div class="p-3 bg-blue-50 text-blue-700 rounded-lg text-sm border border-blue-200">
+                            <b>ระบบเลือกแบบฟอร์มอัตโนมัติ:</b><br>${matchedTpl.name}
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-slate-700 mb-1">เลขที่ใบส่งของ / ใบแจ้งหนี้ (ถ้ามี)</label>
+                            <input id="swal_receipt" class="w-full border border-slate-300 rounded-lg p-2.5 outline-none focus:border-indigo-500" placeholder="เว้นว่างไว้เพื่อเขียนทีหลังได้">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-slate-700 mb-1">เลขที่ใบตรวจรับ (ถ้ามี)</label>
+                            <input id="swal_inspect_no" class="w-full border border-slate-300 rounded-lg p-2.5 outline-none focus:border-indigo-500" placeholder="เว้นว่างไว้เพื่อเขียนทีหลังได้">
+                        </div>
+                    </div>
+                `,
+                focusConfirm: false, showCancelButton: true, confirmButtonText: 'สร้างเอกสาร', cancelButtonText: 'ยกเลิก',
+                preConfirm: () => ({ receiptNo: document.getElementById('swal_receipt').value || '', inspectNo: document.getElementById('swal_inspect_no').value || '' })
+            });
+
+            if (!formValues) return;
+            showLoader();
+            try {
+                const school = schoolRes.data || {};
+                const v = vRes.data || null;
+                
+                const vendorType = v ? v.vendor_type : 'บุคคลธรรมดา';
+                let preVat = amt;
+                let vat = 0;
+                let tax1 = 0;
+
+                if (vendorType === 'นิติบุคคล') {
+                    vat = (amt * 7) / 107;
+                    preVat = amt - vat;
+                }
+
+                if (vendorType === 'นิติบุคคล' && amt >= 500) {
+                    tax1 = preVat * 0.01;
+                } else if (vendorType === 'บุคคลธรรมดา' && amt >= 10000) {
+                    tax1 = preVat * 0.01;
+                }
+
+                const fine = Number(p.late_days) > 0 ? (amt * 0.002 * Number(p.late_days)) : 0;
+                const netPay = amt - tax1 - fine;
+
+                const formatD = (dStr) => {
+                    if(!dStr) return '';
+                    const d = new Date(dStr);
+                    if(isNaN(d.getTime())) return '';
+                    const ms = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+                    return `${d.getDate()} ${ms[d.getMonth()]} ${d.getFullYear()+543}`;
+                };
+
+                let parsedItems = [];
+                try { parsedItems = typeof p.items === 'string' ? JSON.parse(p.items) : (p.items || []); } catch(e) { parsedItems = []; }
+
+                const itemsForWord = parsedItems.map((it, idx) => ({
+                    "ที่": idx + 1, 
+                    "รายการ": it.name || '', 
+                    "จำนวนหน่วย": it.qty || '', "จำนวนหน่วย ": it.qty || '', "จำนวน": it.qty || '',
+                    "ราคาต่อหน่วย": formatMoney(it.price), "ราคาต่อหน่วย ": formatMoney(it.price),
+                    "ราคารวมรายการ": formatMoney(Number(it.qty)*Number(it.price)), "ราคารวมรายการ ": formatMoney(Number(it.qty)*Number(it.price))
+                }));
+
+                const subjBuy = p.procurement_type === 'ซื้อ' ? (p.subject_name||'') : '';
+                const subjHire = p.procurement_type === 'จ้าง' ? (p.subject_name||'') : '';
+
+                const dataToFill = {
+                    "วันที่ตรวจรับ": formatD(p.inspection_date), 
+                    "ขอซื้อ": subjBuy, "ขอซื้อ ": subjBuy, 
+                    "ขอจ้าง": subjHire, "ขอจ้าง ": subjHire,
+                    "จำนวน": parsedItems.length, 
+                    "ชื่อร้าน": v ? v.vendor_name : '', "ผู้ขาย": v ? v.vendor_name : '', "ผู้รับจ้าง": v ? v.vendor_name : '',
+                    "ราคา": formatMoney(amt), 
+                    "ยอดเงินรวมตัวอักษร": ThaiBaht(amt), 
+                    "เลขที่ใบสั่งซื้อ": p.po_number || '', "เลขที่ใบสั่งจ้าง": p.po_number || '',
+                    "เลขที่จัดซื้อ": p.po_number || '', "เลขที่จัดจ้าง": p.po_number || '',
+                    "วันที่จัดซื้อ": formatD(p.po_date), "วันที่จัดจ้าง": formatD(p.po_date), 
+                    "วันครบกำหนดส่ง": formatD(p.due_date), "วันที่ครบกำหนด": formatD(p.due_date),
+                    "เลขที่ใบเสร็จ": formValues.receiptNo, "เลขที่ใบส่งของ": formValues.receiptNo, 
+                    "มูลค่าสินค้า": formatMoney(preVat), "มูลค่า": formatMoney(preVat),
+                    "VAT 7%": formatMoney(vat), "VAT7%": formatMoney(vat), "VAT": formatMoney(vat), 
+                    "ส่วนลด": "0.00", 
+                    "หักภาษี 1%": formatMoney(tax1), "หักภาษี1%": formatMoney(tax1), 
+                    "ค่าปรับ": formatMoney(fine), 
+                    "รวมจ่ายจริง": formatMoney(netPay), "รวมจ่ายจริง ": formatMoney(netPay),
+                    "กลุ่ม/งาน": p.department_name || '', 
+                    "ชื่อโครงการ": p.project_name || '', 
+                    "เพื่อ": p.reason || '', 
+                    "จำนวนวัน": p.delivery_days || '....', "จำนวนวันส่ง": p.delivery_duration || '....',
+                    "ชื่อประธานกรรมการ": p.comm_1 || '', "ชื่อกรรมการ1": p.comm_2 || '', "ชื่อกรรมการ2": p.comm_3 || '',
+                    
+                    // 🌟 เพิ่มตัวแปรสำหรับดึงตำแหน่ง
+                    "ตำแหน่งประธาน": "ประธานกรรมการ", 
+                    "ตำแหน่งกรรมการ1": "กรรมการ", 
+                    "ตำแหน่งกรรมการ2": "กรรมการ",
+                    "ตำแหน่งงานประธาน": getPosition(p.comm_1),
+                    "ตำแหน่งงานกรรมการ1": getPosition(p.comm_2),
+                    "ตำแหน่งงานกรรมการ2": getPosition(p.comm_3),
+                    
+                    "ชื่อเจ้าหน้าที่": school.procurement_officer || '', 
+                    "ที่อยู่ร้าน": v ? v.address : '', "เบอร์ร้าน": v ? v.phone : '', "เบอร์ร้าน ": v ? v.phone : '',
+                    "เลขเสียภาษี": v ? v.tax_id : '', "เลขเสียภาษี ": v ? v.tax_id : '', 
+                    "วันที่ขอ": formatD(p.report_date), "เลขที่ตรวจรับ": formValues.inspectNo,
+                    "ผู้เบิก": p.requester_name || '', "ชื่อผู้เบิก": p.requester_name || '', 
+                    
+                    // 🌟 เพิ่มตัวแปรดึงตำแหน่งผู้เบิกพัสดุ
+                    "ตำแหน่งผู้เบิก": getPosition(p.requester_name), 
+                    
+                    "เล่มที่": "......", "เลขที่": "......",
+                    "items": itemsForWord
+                };
+
+                const response = await fetch(matchedTpl.file_url);
+                const zip = new window.PizZip(await response.arrayBuffer());
+                
+                const doc = new window.docxtemplater(zip, { 
+                    paragraphLoop: true, linebreaks: true, delimiters: { start: '<<', end: '>>' },
+                    nullGetter: function(part) {
+                        if (!part.module) return ".........................";
+                        return "";
+                    }
+                });
+                
+                doc.render(dataToFill);
+                const out = doc.getZip().generate({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+                
+                hideLoader();
+                window.saveAs(out, `เอกสาร${p.procurement_type}_${(p.po_number||'รอดำเนินการ').replace('/','-')}.docx`);
+            } catch (error) {
+                hideLoader(); Swal.fire({ icon: 'error', title: 'สร้างเอกสารล้มเหลว', text: 'กรุณาตรวจสอบว่ามีแท็กพิมพ์ผิด หรือยังไม่ได้ใส่ <<#items>> ในไฟล์ Template หรือไม่' });
+            }
+        };
+	
     </script>
 </body>
 </html>

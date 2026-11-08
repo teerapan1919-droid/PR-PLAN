@@ -284,14 +284,20 @@
             }
 
             AppState.user = data;
-            // 🌟 บันทึก Session ไว้ให้ระบบพัสดุดึงไปใช้
+            // บันทึก Session ไว้ให้ระบบพัสดุดึงไปใช้
             localStorage.setItem('pr_user_session', JSON.stringify(data)); 
             
-            // 🌟 ซ่อนหน้า Login และแสดงหน้าเลือกระบบ
+            // ซ่อนหน้า Login
             document.getElementById('login-section').classList.add('hidden');
-            document.getElementById('system-selection').classList.remove('hidden');
-            document.getElementById('welcome-name').innerText = data.name;
-            lucide.createIcons();
+            
+            // 🌟 เช็คสิทธิ์: ถ้าเป็น Admin ให้แสดงหน้าเลือกระบบ ถ้าไม่ใช่ให้พุ่งเข้าระบบแผนทันที
+            if (data.sys_role === 'Admin') {
+                document.getElementById('system-selection').classList.remove('hidden');
+                document.getElementById('welcome-name').innerText = data.name;
+                lucide.createIcons();
+            } else {
+                window.enterPRPLAN(); // ทางลัดทะลุเข้าระบบแผน
+            }
             
             Swal.fire({ icon: 'success', title: 'เข้าสู่ระบบสำเร็จ', text: `ยินดีต้อนรับคุณ ${data.name}`, showConfirmButton: false, timer: 1500 });
         }
@@ -956,8 +962,10 @@
             let rowsHtml = '';
             if (tpls && tpls.length > 0) {
                 tpls.forEach((t, index) => {
-                    const activeBadge = index === 0 ? `<div class="mt-1"><span class="bg-emerald-600 text-white px-2 py-0.5 rounded-full text-[10px] font-bold">ใช้งานอยู่ (Active)</span></div>` : '';
-                    
+                    // 🌟 เปลี่ยนให้ป้าย Active ไปติดเฉพาะไฟล์ของระบบแผน (เช่น "แบบฟอร์ม งป")
+					const isPlanTemplate = !t.name.includes('ซื้อ') && !t.name.includes('จ้าง') && (t.name.includes('แผน') || t.name.includes('งป') || t.name.includes('เบิก'));
+					const activeBadge = isPlanTemplate ? `<div class="mt-1"><span class="bg-indigo-600 text-white px-2 py-0.5 rounded-full text-[10px] font-bold">ฟอร์มระบบแผน</span></div>` : `<div class="mt-1"><span class="bg-emerald-600 text-white px-2 py-0.5 rounded-full text-[10px] font-bold">ฟอร์มพัสดุ</span></div>`;
+										
                     rowsHtml += `
                         <tr class="border-b border-slate-200 hover:bg-slate-50 transition">
                             <td class="p-3">
@@ -1523,6 +1531,7 @@
                                 <option value="5">5. เงินกิจกรรมพัฒนาผู้เรียน</option>
                                 <option value="6">6. เงินรายได้สถานศึกษา (ระบุเอง)</option>
                                 <option value="7">7. เงินอื่นๆ (ระบุเอง)</option>
+								<option value="8">8. เงินรายได้-ค่าบำรุงการศึกษา</option>
                             </select>
                         </div>
 
@@ -1774,7 +1783,8 @@
             '4': 'เงินค่าหนังสือเรียน', 
             '5': 'เงินกิจกรรมพัฒนาผู้เรียน', 
             '6': 'เงินรายได้สถานศึกษา',
-            '7': 'เงินอื่นๆ'
+            '7': 'เงินอื่นๆ',
+			'8': 'เงินรายได้-ค่าบำรุงการศึกษา'
         };
 
         let g_users = [];
@@ -3108,10 +3118,6 @@
                 const usedAmount = getUsedAmount(p.id); 
                 const remainAmount = p.total_budget - usedAmount;
 
-                // 🌟 เปลี่ยนคำสั่งที่ปุ่มพิมพ์ ให้เรียกใช้ฟังก์ชันพิมพ์เอกสาร A4 โดยตรง
-                const hasApproved = expenses.some(e => e.project_id === p.id);
-                const printBtn = hasApproved ? `<button onclick="window.printExpenseDocument(${p.id}, null)" class="text-white bg-indigo-500 hover:bg-indigo-600 px-2 py-1 rounded-md text-xs font-medium flex items-center gap-1 transition shadow-sm"><i data-lucide="printer" class="w-3 h-3"></i> พิมพ์</button>` : '';
-
                 mainRowsHtml += `
                     <tr class="hover:bg-blue-50/50 border-b border-slate-200 transition">
                         <td class="p-3 font-medium text-blue-700">${p.name}</td>
@@ -3125,7 +3131,6 @@
                                 <button onclick="window.openProjectViewModal(${p.id})" class="text-white bg-cyan-500 hover:bg-cyan-600 px-2 py-1 rounded-md text-xs font-medium flex items-center gap-1 transition shadow-sm"><i data-lucide="eye" class="w-3 h-3"></i> ดูข้อมูล</button>
                                 <button onclick="window.openExpenseModal(${p.id}, null, '${p.name}')" class="text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 px-2 py-1 rounded-md text-xs font-medium flex items-center gap-1 transition shadow-sm"><i data-lucide="file-check" class="w-3 h-3 text-blue-500"></i> ขอเบิก</button>
                                 <button onclick="window.openProjectHistoryModal(${p.id})" class="text-white bg-slate-600 hover:bg-slate-700 px-2 py-1 rounded-md text-xs font-medium flex items-center gap-1 transition shadow-sm"><i data-lucide="history" class="w-3 h-3"></i> ประวัติ</button>
-                                ${printBtn}
                             </div>
                         </td>
                     </tr>
@@ -3138,10 +3143,6 @@
                 const actAmount = parseFloat(act.amount) || 0;
                 const usedAmount = getUsedAmount(act.project_id, act.id); 
                 const remainAmount = actAmount - usedAmount;
-
-                // 🌟 เปลี่ยนคำสั่งที่ปุ่มพิมพ์ ให้เรียกใช้ฟังก์ชันพิมพ์เอกสาร A4 โดยตรง
-                const hasApprovedAct = expenses.some(e => e.project_id === act.project_id && e.activity_id === act.id);
-                const printBtnAct = hasApprovedAct ? `<button onclick="window.printExpenseDocument(${act.project_id}, '${act.id}')" class="text-white bg-indigo-500 hover:bg-indigo-600 px-2 py-1 rounded-md text-xs font-medium flex items-center gap-1 transition shadow-sm"><i data-lucide="printer" class="w-3 h-3"></i> พิมพ์</button>` : '';
 
                 subRowsHtml += `
                     <tr class="hover:bg-cyan-50/50 border-b border-slate-200 transition">
@@ -3156,7 +3157,6 @@
                                 <button onclick="window.openProjectViewModal(${act.project_id})" class="text-white bg-cyan-500 hover:bg-cyan-600 px-2 py-1 rounded-md text-xs font-medium flex items-center gap-1 transition shadow-sm"><i data-lucide="eye" class="w-3 h-3"></i> ดูข้อมูล</button>
                                 <button onclick="window.openExpenseModal(${act.project_id}, '${act.id}', '${act.name}')" class="text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 px-2 py-1 rounded-md text-xs font-medium flex items-center gap-1 transition shadow-sm"><i data-lucide="file-check" class="w-3 h-3 text-blue-500"></i> ขอเบิก</button>
                                 <button onclick="window.openProjectHistoryModal(${act.project_id}, '${act.id}', '${act.name}')" class="text-white bg-slate-600 hover:bg-slate-700 px-2 py-1 rounded-md text-xs font-medium flex items-center gap-1 transition shadow-sm"><i data-lucide="history" class="w-3 h-3"></i> ประวัติ</button>
-                                ${printBtnAct}
                             </div>
                         </td>
                     </tr>
@@ -3579,7 +3579,8 @@
 
                     // ปุ่มพิมพ์เอกสาร (โชว์เฉพาะแท็บ อนุมัติแล้ว)
                     const printBtn = currentHistoryTab === 'approved' 
-                        ? `<button onclick="window.printExpenseDocumentById(${req.id})" class="text-white bg-indigo-600 hover:bg-indigo-700 px-3 py-1.5 rounded-lg text-xs font-medium shadow-sm transition flex items-center gap-1.5"><i data-lucide="printer" class="w-3 h-3"></i> พิมพ์เอกสาร</button>` 
+                        ? `<button onclick="window.printExpenseDocumentById(${req.id})" class="text-white bg-indigo-600 hover:bg-indigo-700 px-3 py-1.5 rounded-lg text-xs font-medium shadow-sm transition flex items-center gap-1.5"><i data-lucide="printer" class="w-3 h-3"></i> ใบขอเบิก</button>
+                           <button onclick="window.printProcurementAuto(${req.id})" class="text-white bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 rounded-lg text-xs font-medium shadow-sm transition flex items-center gap-1.5 ml-2"><i data-lucide="printer" class="w-3 h-3"></i> จัดซื้อ/จ้าง</button>` 
                         : '';
 
                     // 🌟 ปุ่มลบ (โชว์เฉพาะแท็บ รอพิจารณา) 🌟
@@ -4471,7 +4472,7 @@
                 const [reqRes, projRes, tplRes, schoolRes] = await Promise.all([
                     reqQuery,
                     supabaseClient.from('projects').select('activities, app_users(name)').eq('id', projId).single(),
-                    supabaseClient.from('templates').select('*').order('id', {ascending: false}).limit(1),
+                    supabaseClient.from('templates').select('*').order('id', {ascending: false}), // 🌟 ดึงมาทั้งหมดก่อน
                     supabaseClient.from('school_info').select('allocations_config').limit(1).single()
                 ]);
 
@@ -4480,7 +4481,13 @@
 
                 const req = reqRes.data[0];
                 const currentAct = (projRes.data?.activities || []).find(a => a.id === actId) || {};
-                const templateUrl = tplRes.data[0].file_url;
+                
+                // 🌟 ระบบเลือกไฟล์สำหรับใบขอเบิก (ฝั่งแผน) โดยข้ามไฟล์พัสดุ
+                const tpls = tplRes.data;
+                let selectedTpl = tpls.find(t => !t.name.includes('ซื้อ') && !t.name.includes('จ้าง') && (t.name.includes('แผน') || t.name.includes('งป') || t.name.includes('เบิก')));
+                if(!selectedTpl) selectedTpl = tpls[0]; // สำรองถ้าหาไม่เจอจริงๆ
+                
+                const templateUrl = selectedTpl.file_url;
                 const adminSigUrl = schoolRes.data?.allocations_config?.admin_sig_url || '';
 
                 const { data: allActReqs } = await supabaseClient.from('expense_requests').select('id, total_amount, status, created_at').eq('activity_id', req.activity_id).order('created_at', {ascending: true});
@@ -4526,7 +4533,7 @@
                     dep: depName, act_name: req.activity_name || '...........................', proj_name: req.project_name || '...........................', proj_owner: projOwnerName, act_code: currentAct.code || '-', loc: req.location || '...........................',
                     budget: formatMoney(req.activity_budget), req_amt: formatMoney(req.total_amount), req_round: reqRound.toString(), act_remain: formatMoney(actRemain),
                     req_name: req.requester_name || '...........................', comm_p: req.comm_president || '...........................', comm_1: req.comm_1 || '...........................', comm_2: req.comm_2 || '...........................',
-                    admin_sig: adminSigUrl, // 🌟 ส่งรูปลิงก์ให้ระบบจัดการโหลดเอง
+                    admin_sig: adminSigUrl,
                     items: itemsForWord
                 };
 
@@ -4559,7 +4566,6 @@
                 const imageModule = new window.ImageModule(opts);
                 const doc = new window.docxtemplater(zip, { paragraphLoop: true, linebreaks: true, modules: [imageModule] });
                 
-                // 🌟 กลับมาใช้ renderAsync อย่างปลอดภัย เพราะเราปลดล็อกเบราว์เซอร์แล้ว 100%
                 await doc.renderAsync(dataToFill);
 
                 const out = doc.getZip().generate({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
@@ -4582,14 +4588,20 @@
 
                 const [projRes, tplRes, schoolRes] = await Promise.all([
                     supabaseClient.from('projects').select('activities, app_users(name)').eq('id', req.project_id).single(),
-                    supabaseClient.from('templates').select('*').order('id', {ascending: false}).limit(1),
+                    supabaseClient.from('templates').select('*').order('id', {ascending: false}), // 🌟 ดึงมาทั้งหมดก่อน
                     supabaseClient.from('school_info').select('allocations_config').limit(1).single()
                 ]);
 
                 if (!tplRes.data || tplRes.data.length === 0) { hideLoader(); return Swal.fire({ icon: 'warning', title: 'ไม่พบ Template' }); }
 
                 const currentAct = (projRes.data?.activities || []).find(a => a.id === req.activity_id) || {};
-                const templateUrl = tplRes.data[0].file_url;
+                
+                // 🌟 ระบบเลือกไฟล์สำหรับใบขอเบิก (ฝั่งแผน) โดยข้ามไฟล์พัสดุ
+                const tpls = tplRes.data;
+                let selectedTpl = tpls.find(t => !t.name.includes('ซื้อ') && !t.name.includes('จ้าง') && (t.name.includes('แผน') || t.name.includes('งป') || t.name.includes('เบิก')));
+                if(!selectedTpl) selectedTpl = tpls[0]; 
+                
+                const templateUrl = selectedTpl.file_url;
                 const adminSigUrl = schoolRes.data?.allocations_config?.admin_sig_url || '';
 
                 const { data: allActReqs } = await supabaseClient.from('expense_requests').select('id, total_amount, status, created_at').eq('activity_id', req.activity_id).order('created_at', {ascending: true});
@@ -5365,6 +5377,200 @@
                     row.style.display = 'none';
                 }
             });
+        };
+		
+		
+		// ==========================================
+        // ระบบแปลงตัวเลขเป็นอักษรไทย & พิมพ์เอกสาร Word จัดซื้อจัดจ้าง
+        // ==========================================
+		const ThaiBaht = (amountStr) => {
+            const num = parseFloat(amountStr || 0).toFixed(2);
+            if (num === '0.00') return 'ศูนย์บาทถ้วน';
+            const parts = num.split('.');
+            let baht = parts[0], satang = parts[1];
+            const text = ['ศูนย์', 'หนึ่ง', 'สอง', 'สาม', 'สี่', 'ห้า', 'หก', 'เจ็ด', 'แปด', 'เก้า'];
+            const unit = ['', 'สิบ', 'ร้อย', 'พัน', 'หมื่น', 'แสน', 'ล้าน'];
+            const convert = (n) => {
+                let res = '';
+                for (let i = 0; i < n.length; i++) {
+                    const digit = parseInt(n[i]);
+                    if (digit !== 0) {
+                        if (i === n.length - 1 && digit === 1 && n.length > 1 && n[i-1] != '0') res += 'เอ็ด';
+                        else if (i === n.length - 2 && digit === 2) res += 'ยี่';
+                        else if (i === n.length - 2 && digit === 1) res += '';
+                        else res += text[digit];
+                        res += unit[n.length - 1 - i];
+                    }
+                }
+                return res;
+            };
+            let result = convert(baht) + 'บาท';
+            if (satang === '00') result += 'ถ้วน';
+            else result += convert(satang) + 'สตางค์';
+            return result;
+        };
+
+        window.printProcurementAuto = async (reqId) => {
+            showLoader();
+            const { data: procData } = await supabaseClient.from('supply_procurements').select('*').eq('expense_request_id', reqId).single();
+            if (!procData) {
+                hideLoader();
+                return Swal.fire({ icon: 'warning', title: 'ยังไม่พร้อมพิมพ์', text: 'แอดมินพัสดุยังไม่ได้จัดทำเอกสารจัดซื้อ/จ้างสำหรับรายการนี้ครับ' });
+            }
+            const p = procData;
+
+            const [tplRes, schoolRes, vRes] = await Promise.all([
+                supabaseClient.from('templates').select('*').order('id', {ascending: false}),
+                supabaseClient.from('school_info').select('*').limit(1).single(),
+                supabaseClient.from('supply_vendors').select('*').eq('id', p.vendor_id || 0).single()
+            ]);
+            hideLoader();
+
+            const tpls = tplRes.data || [];
+            
+            // 🌟 แก้บั๊ก: แปลงยอดเงินโดยลบลูกน้ำ (,) ออกก่อน ป้องกันระบบคำนวณพลาด
+            const rawAmt = p.budget_amount || 0;
+            const amt = parseFloat(String(rawAmt).replace(/,/g, '')) || 0;
+            
+            const keyword1 = p.procurement_type === 'ซื้อ' ? 'ซื้อ' : 'จ้าง';
+            const isOver5000 = amt > 5000;
+            
+            const matchedTpl = tpls.find(t => {
+                const tName = String(t.name).replace(/\s+/g, ''); // ตัดช่องว่างออกให้หมดก่อนเช็ค
+                const hasType = tName.includes(keyword1);
+                if (!hasType) return false;
+                
+                if (isOver5000) {
+                    return tName.includes('เกิน') && !tName.includes('ไม่เกิน');
+                } else {
+                    return tName.includes('ไม่เกิน');
+                }
+            });
+
+            if (!matchedTpl) return Swal.fire({ icon: 'error', title: 'ไม่พบแบบฟอร์ม', text: `ระบบต้องการแบบฟอร์มที่มีคำว่า "${keyword1}" และ "เกิน/ไม่เกิน" ในชื่อไฟล์ (เมนู Template)` });
+
+            const { value: formValues } = await Swal.fire({
+                title: 'พิมพ์เอกสารจัดซื้อ/จัดจ้าง',
+                html: `
+                    <div class="text-left space-y-4">
+                        <div class="p-3 bg-blue-50 text-blue-700 rounded-lg text-sm border border-blue-200">
+                            <b>ระบบเลือกแบบฟอร์มอัตโนมัติ:</b><br>${matchedTpl.name}
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-slate-700 mb-1">เลขที่ใบส่งของ / ใบแจ้งหนี้ (ถ้ามี)</label>
+                            <input id="swal_receipt" class="w-full border border-slate-300 rounded-lg p-2.5 outline-none focus:border-indigo-500" placeholder="เว้นว่างไว้เพื่อเขียนด้วยมือทีหลังได้">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-slate-700 mb-1">เลขที่ใบตรวจรับ (ถ้ามี)</label>
+                            <input id="swal_inspect_no" class="w-full border border-slate-300 rounded-lg p-2.5 outline-none focus:border-indigo-500" placeholder="เว้นว่างไว้เพื่อเขียนด้วยมือทีหลังได้">
+                        </div>
+                    </div>
+                `,
+                focusConfirm: false, showCancelButton: true, confirmButtonText: 'สร้างเอกสาร', cancelButtonText: 'ยกเลิก',
+                preConfirm: () => ({ receiptNo: document.getElementById('swal_receipt').value || '', inspectNo: document.getElementById('swal_inspect_no').value || '' })
+            });
+
+            if (!formValues) return;
+            showLoader();
+            try {
+                const school = schoolRes.data || {};
+                const v = vRes.data || null;
+                
+                const vendorType = v ? v.vendor_type : 'บุคคลธรรมดา';
+                let preVat = amt;
+                let vat = 0;
+                let tax1 = 0;
+
+                if (vendorType === 'นิติบุคคล') {
+                    vat = (amt * 7) / 107;
+                    preVat = amt - vat;
+                }
+
+                if (vendorType === 'นิติบุคคล' && amt >= 500) {
+                    tax1 = preVat * 0.01;
+                } else if (vendorType === 'บุคคลธรรมดา' && amt >= 10000) {
+                    tax1 = preVat * 0.01;
+                }
+
+                const fine = Number(p.late_days) > 0 ? (amt * 0.002 * Number(p.late_days)) : 0;
+                const netPay = amt - tax1 - fine;
+
+                const formatD = (dStr) => {
+                    if(!dStr) return '';
+                    const d = new Date(dStr);
+                    if(isNaN(d.getTime())) return '';
+                    const ms = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+                    return `${d.getDate()} ${ms[d.getMonth()]} ${d.getFullYear()+543}`;
+                };
+
+                let parsedItems = [];
+                try { parsedItems = typeof p.items === 'string' ? JSON.parse(p.items) : (p.items || []); } catch(e) { parsedItems = []; }
+
+                const itemsForWord = parsedItems.map((it, idx) => ({
+                    "ที่": idx + 1, 
+                    "รายการ": it.name || '', 
+                    "จำนวนหน่วย": it.qty || '', "จำนวนหน่วย ": it.qty || '', "จำนวน": it.qty || '',
+                    "ราคาต่อหน่วย": formatMoney(it.price), "ราคาต่อหน่วย ": formatMoney(it.price),
+                    "ราคารวมรายการ": formatMoney(Number(it.qty)*Number(it.price)), "ราคารวมรายการ ": formatMoney(Number(it.qty)*Number(it.price))
+                }));
+
+                const subjBuy = p.procurement_type === 'ซื้อ' ? (p.subject_name||'') : '';
+                const subjHire = p.procurement_type === 'จ้าง' ? (p.subject_name||'') : '';
+
+                const dataToFill = {
+                    "วันที่ตรวจรับ": formatD(p.inspection_date), 
+                    "ขอซื้อ": subjBuy, "ขอซื้อ ": subjBuy, 
+                    "ขอจ้าง": subjHire, "ขอจ้าง ": subjHire,
+                    "จำนวน": parsedItems.length, 
+                    "ชื่อร้าน": v ? v.vendor_name : '', "ผู้ขาย": v ? v.vendor_name : '', "ผู้รับจ้าง": v ? v.vendor_name : '',
+                    "ราคา": formatMoney(amt), 
+                    "ยอดเงินรวมตัวอักษร": ThaiBaht(amt), 
+                    "เลขที่ใบสั่งซื้อ": p.po_number || '', "เลขที่ใบสั่งจ้าง": p.po_number || '',
+                    "เลขที่จัดซื้อ": p.po_number || '', "เลขที่จัดจ้าง": p.po_number || '',
+                    "วันที่จัดซื้อ": formatD(p.po_date), "วันที่จัดจ้าง": formatD(p.po_date), 
+                    "วันครบกำหนดส่ง": formatD(p.due_date), "วันที่ครบกำหนด": formatD(p.due_date),
+                    "เลขที่ใบเสร็จ": formValues.receiptNo, "เลขที่ใบส่งของ": formValues.receiptNo, 
+                    "มูลค่าสินค้า": formatMoney(preVat), "มูลค่า": formatMoney(preVat),
+                    "VAT 7%": formatMoney(vat), "VAT7%": formatMoney(vat), "VAT": formatMoney(vat), 
+                    "ส่วนลด": "0.00", 
+                    "หักภาษี 1%": formatMoney(tax1), "หักภาษี1%": formatMoney(tax1), 
+                    "ค่าปรับ": formatMoney(fine), 
+                    "รวมจ่ายจริง": formatMoney(netPay), "รวมจ่ายจริง ": formatMoney(netPay),
+                    "กลุ่ม/งาน": p.department_name || '', 
+                    "ชื่อโครงการ": p.project_name || '', 
+                    "เพื่อ": p.reason || '', 
+                    "จำนวนวัน": p.delivery_days || '....', "จำนวนวันส่ง": p.delivery_duration || '....',
+                    "ชื่อประธานกรรมการ": p.comm_1 || '', "ชื่อกรรมการ1": p.comm_2 || '', "ชื่อกรรมการ2": p.comm_3 || '',
+                    "ตำแหน่งประธาน": "ประธานกรรมการ", "ตำแหน่งกรรมการ1": "กรรมการ", "ตำแหน่งกรรมการ2": "กรรมการ",
+                    "ชื่อเจ้าหน้าที่": school.procurement_officer || '', 
+                    "ที่อยู่ร้าน": v ? v.address : '', "เบอร์ร้าน": v ? v.phone : '', "เบอร์ร้าน ": v ? v.phone : '',
+                    "เลขเสียภาษี": v ? v.tax_id : '', "เลขเสียภาษี ": v ? v.tax_id : '', 
+                    "วันที่ขอ": formatD(p.report_date), "เลขที่ตรวจรับ": formValues.inspectNo,
+                    "ผู้เบิก": p.requester_name || '', "ชื่อผู้เบิก": p.requester_name || '', 
+                    "ตำแหน่งผู้เบิก": ".........................", 
+                    "เล่มที่": "......", "เลขที่": "......",
+                    "items": itemsForWord
+                };
+
+                const response = await fetch(matchedTpl.file_url);
+                const zip = new window.PizZip(await response.arrayBuffer());
+                
+                const doc = new window.docxtemplater(zip, { 
+                    paragraphLoop: true, linebreaks: true, delimiters: { start: '<<', end: '>>' },
+                    nullGetter: function(part) {
+                        if (!part.module) return ".........................";
+                        return "";
+                    }
+                });
+                
+                doc.render(dataToFill);
+                const out = doc.getZip().generate({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+                
+                hideLoader();
+                window.saveAs(out, `เอกสาร${p.procurement_type}_${(p.po_number||'รอดำเนินการ').replace('/','-')}.docx`);
+            } catch (error) {
+                hideLoader(); Swal.fire({ icon: 'error', title: 'สร้างเอกสารล้มเหลว', text: 'กรุณาตรวจสอบว่ามีแท็กพิมพ์ผิด หรือยังไม่ได้ใส่ <<#items>> ในไฟล์ Template หรือไม่' });
+            }
         };
 		
     </script>
