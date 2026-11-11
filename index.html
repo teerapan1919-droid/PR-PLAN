@@ -3899,13 +3899,31 @@
                 let allocConfig = schoolConf?.allocations_config || {};
                 let docRun = allocConfig.doc_run || { current_num: 1, year_text: '70' };
                 
-                payload.request_code = docRun.current_num + '/' + docRun.year_text;
+                // 🌟 ปรับปรุงการรันเลข: ไปดึงเลขจากใบล่าสุดในฐานข้อมูลมาเช็ค
+                const { data: latestReq } = await supabaseClient.from('expense_requests')
+                    .select('request_code')
+                    .order('id', { ascending: false })
+                    .limit(1);
+
+                let nextNum = Number(docRun.current_num); // ค่าเริ่มต้นถ้าไม่มีข้อมูลในฐานข้อมูล
+
+                if (latestReq && latestReq.length > 0 && latestReq[0].request_code) {
+                    // แยกรหัสด้านหน้าเครื่องหมาย / ออกมา (เช่น "2/70" จะได้ "2")
+                    const lastNumStr = latestReq[0].request_code.split('/')[0];
+                    const lastNum = parseInt(lastNumStr, 10);
+                    if (!isNaN(lastNum)) {
+                        // ป้องกันกรณีเลขที่ตั้งไว้ในตั้งค่า น้อยกว่าเลขในระบบจริง
+                        nextNum = Math.max(nextNum, lastNum + 1);
+                    }
+                }
+
+                payload.request_code = nextNum + '/' + docRun.year_text;
                 
                 const { error } = await supabaseClient.from('expense_requests').insert([payload]);
                 errObj = error;
 
                 if (!error && schoolConf) {
-                    docRun.current_num = Number(docRun.current_num) + 1;
+                    docRun.current_num = nextNum + 1;
                     allocConfig.doc_run = docRun;
                     await supabaseClient.from('school_info').update({ allocations_config: allocConfig }).eq('id', schoolConf.id);
                 }
@@ -3917,13 +3935,19 @@
                     const { data: schoolConf } = await supabaseClient.from('school_info').select('telegram_token, telegram_chat_id, telegram_enabled').limit(1).single();
                     if (schoolConf && schoolConf.telegram_enabled && schoolConf.telegram_token && schoolConf.telegram_chat_id) {
                         const requestCodeTxt = expCurrentEditId ? '(แก้ไขเอกสารเดิมที่ตีกลับ)' : payload.request_code;
+                        
+                        // 🌟 ดึง URL ปัจจุบันของระบบเพื่อแนบไปในแชทอัตโนมัติ
+                        // ลบบรรทัดที่ดึงอัตโนมัติออก แล้วใส่ลิงก์เว็บตรงๆ ลงไปในเครื่องหมายคำพูดแทนครับ
+							const systemUrl = "https://teerapan1919-droid.github.io/PR-PLAN/";
+
                         const message = `🔔 *มีใบขออนุมัติเบิกจ่ายใหม่เข้าสู่ระบบ!*\n\n` +
                                         `🔖 *เลขที่เอกสาร:* ${requestCodeTxt}\n` +
                                         `📁 *โครงการ:* ${payload.project_name}\n` +
                                         `📋 *กิจกรรม:* ${payload.activity_name || '-'}\n` +
                                         `💰 *ยอดขอเบิก:* ${formatMoney(payload.total_amount)} บาท\n` +
                                         `👤 *ผู้ขอเบิก:* ${payload.requester_name}\n\n` +
-                                        `⏳ *สถานะ:* รอการตรวจสอบจาก Admin`;
+                                        `⏳ *สถานะ:* รอการตรวจสอบจาก Admin\n` +
+                                        `🔗 *เข้าระบบ:* ${systemUrl}`; // 🌟 เพิ่มบรรทัดนี้
 
                         const token = schoolConf.telegram_token.trim();
                         const chatId = String(schoolConf.telegram_chat_id).trim();
@@ -5419,24 +5443,32 @@
             }
             const p = procData;
 
-            const [tplRes, schoolRes, vRes] = await Promise.all([
+            // 🌟 เพิ่มการดึงข้อมูลตาราง app_users เพื่อเอาตำแหน่งมาใช้
+            const [tplRes, schoolRes, vRes, userRes] = await Promise.all([
                 supabaseClient.from('templates').select('*').order('id', {ascending: false}),
                 supabaseClient.from('school_info').select('*').limit(1).single(),
-                supabaseClient.from('supply_vendors').select('*').eq('id', p.vendor_id || 0).single()
+                supabaseClient.from('supply_vendors').select('*').eq('id', p.vendor_id || 0).single(),
+                supabaseClient.from('app_users').select('name, position')
             ]);
             hideLoader();
 
             const tpls = tplRes.data || [];
+            const users = userRes.data || [];
             
-            // 🌟 แก้บั๊ก: แปลงยอดเงินโดยลบลูกน้ำ (,) ออกก่อน ป้องกันระบบคำนวณพลาด
-            const rawAmt = p.budget_amount || 0;
-            const amt = parseFloat(String(rawAmt).replace(/,/g, '')) || 0;
+            // 🌟 ฟังก์ชันช่วยค้นหาตำแหน่งจากชื่อ
+            const getPosition = (name) => {
+                if (!name) return '.........................';
+                const u = users.find(u => u.name.trim() === name.trim());
+                return u && u.position ? u.position : '.........................';
+            };
             
             const keyword1 = p.procurement_type === 'ซื้อ' ? 'ซื้อ' : 'จ้าง';
+            const rawAmt = p.budget_amount || 0;
+            const amt = parseFloat(String(rawAmt).replace(/,/g, '')) || 0;
             const isOver5000 = amt > 5000;
             
             const matchedTpl = tpls.find(t => {
-                const tName = String(t.name).replace(/\s+/g, ''); // ตัดช่องว่างออกให้หมดก่อนเช็ค
+                const tName = String(t.name).replace(/\s+/g, '');
                 const hasType = tName.includes(keyword1);
                 if (!hasType) return false;
                 
@@ -5541,13 +5573,24 @@
                     "เพื่อ": p.reason || '', 
                     "จำนวนวัน": p.delivery_days || '....', "จำนวนวันส่ง": p.delivery_duration || '....',
                     "ชื่อประธานกรรมการ": p.comm_1 || '', "ชื่อกรรมการ1": p.comm_2 || '', "ชื่อกรรมการ2": p.comm_3 || '',
-                    "ตำแหน่งประธาน": "ประธานกรรมการ", "ตำแหน่งกรรมการ1": "กรรมการ", "ตำแหน่งกรรมการ2": "กรรมการ",
+                    
+                    // 🌟 เพิ่มตัวแปรสำหรับดึงตำแหน่ง
+                    "ตำแหน่งประธาน": "ประธานกรรมการ", 
+                    "ตำแหน่งกรรมการ1": "กรรมการ", 
+                    "ตำแหน่งกรรมการ2": "กรรมการ",
+                    "ตำแหน่งงานประธาน": getPosition(p.comm_1),
+                    "ตำแหน่งงานกรรมการ1": getPosition(p.comm_2),
+                    "ตำแหน่งงานกรรมการ2": getPosition(p.comm_3),
+                    
                     "ชื่อเจ้าหน้าที่": school.procurement_officer || '', 
                     "ที่อยู่ร้าน": v ? v.address : '', "เบอร์ร้าน": v ? v.phone : '', "เบอร์ร้าน ": v ? v.phone : '',
                     "เลขเสียภาษี": v ? v.tax_id : '', "เลขเสียภาษี ": v ? v.tax_id : '', 
                     "วันที่ขอ": formatD(p.report_date), "เลขที่ตรวจรับ": formValues.inspectNo,
                     "ผู้เบิก": p.requester_name || '', "ชื่อผู้เบิก": p.requester_name || '', 
-                    "ตำแหน่งผู้เบิก": ".........................", 
+                    
+                    // 🌟 เพิ่มตัวแปรดึงตำแหน่งผู้เบิกพัสดุ
+                    "ตำแหน่งผู้เบิก": getPosition(p.requester_name), 
+                    
                     "เล่มที่": "......", "เลขที่": "......",
                     "items": itemsForWord
                 };

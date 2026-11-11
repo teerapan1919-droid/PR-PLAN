@@ -2056,13 +2056,23 @@
             const year = document.getElementById('p_year').value;
             
             if(type && year) {
-                // หารายการทั้งหมดในปีนั้นและประเภทนั้นเพื่อรันเลข
-                const { count } = await supabaseClient.from('supply_procurements')
-                    .select('*', { count: 'exact', head: true })
+                // 🌟 เปลี่ยนจากการนับแถว เป็นดึงข้อมูลใบล่าสุด (ID สูงสุด) ของปีนั้นและประเภทนั้น
+                const { data } = await supabaseClient.from('supply_procurements')
+                    .select('po_number')
                     .eq('procurement_type', type)
-                    .eq('academic_year', year);
+                    .eq('academic_year', year)
+                    .order('id', { ascending: false }) // เรียงจากล่าสุดลงไปเก่าสุด
+                    .limit(1); // ดึงมาแค่ใบเดียว (ใบล่าสุด)
                 
-                const nextNum = (count || 0) + 1;
+                let nextNum = 1; // ถ้ายังไม่มีเลยให้เริ่มที่ 1
+                
+                if (data && data.length > 0 && data[0].po_number) {
+                    // สมมติใบล่าสุดเลข '015/2567' เราจะแยกเอาแค่ '015' มาแปลงเป็นตัวเลข แล้ว +1
+                    const lastNumStr = data[0].po_number.split('/')[0];
+                    nextNum = (parseInt(lastNumStr, 10) || 0) + 1;
+                }
+                
+                // แปลงกลับเป็นฟอร์แมต 3 หลัก เช่น 016/2567
                 document.getElementById('p_po_num').value = String(nextNum).padStart(3, '0') + '/' + year;
             }
         }
