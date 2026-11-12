@@ -1532,7 +1532,8 @@
             );
             
             window.procBuyList = procurements.filter(p => p.procurement_type === 'ซื้อ');
-            window.procHireList = procurements.filter(p => p.procurement_type === 'จ้าง');
+            // 🌟 ให้แท็บจัดจ้าง แสดงทั้ง "จ้าง" และ "จ้างบุคลากร"
+            window.procHireList = procurements.filter(p => p.procurement_type === 'จ้าง' || p.procurement_type === 'จ้างบุคลากร');
 
             container.innerHTML = `
                 <div class="mb-6 fade-in flex flex-col lg:flex-row lg:items-end justify-between gap-4">
@@ -1551,9 +1552,8 @@
                 </div>
                 <div id="proc_content_area" class="fade-in"></div>
 
-                <!-- MODAL บันทึกจัดซื้อ/จ้างเดิม (ซ่อนไว้) -->
+                <!-- MODAL บันทึกจัดซื้อ/จ้าง -->
                 <div id="proc-modal" class="hidden fixed inset-0 z-[70] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-2 md:p-6 fade-in">
-                    <!-- ... (โครงสร้างเดิม) ... -->
                     <div class="bg-white rounded-2xl shadow-2xl w-full max-w-6xl flex flex-col max-h-full overflow-hidden">
                         <div class="bg-indigo-600 text-white p-4 flex justify-between items-center shrink-0">
                             <h3 class="font-bold flex items-center gap-2" id="proc_modal_title"><i data-lucide="file-plus" class="w-5 h-5"></i> บันทึกข้อมูลจัดซื้อ/จัดจ้าง</h3>
@@ -1566,125 +1566,12 @@
                         </div>
                     </div>
                 </div>
-
-                <!-- 🌟 MODAL 1: รายการพัสดุสำหรับตรวจรับ -->
-                <div id="receive-list-modal" class="hidden fixed inset-0 z-[80] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-2 md:p-6 fade-in">
-                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-5xl flex flex-col max-h-full overflow-hidden">
-                        <div class="bg-teal-600 text-white p-4 flex justify-between items-center shrink-0">
-                            <h3 class="font-bold flex items-center gap-2"><i data-lucide="check-square" class="w-5 h-5"></i> รายการพัสดุสำหรับตรวจรับ</h3>
-                            <button onclick="document.getElementById('receive-list-modal').classList.add('hidden')" class="text-white hover:bg-white/20 p-1.5 rounded-lg transition"><i data-lucide="x" class="w-5 h-5"></i></button>
-                        </div>
-                        <div class="p-4 md:p-6 overflow-y-auto space-y-6 flex-1 bg-slate-50" id="receive_list_body">
-                            <!-- จะถูกเติมด้วย JS -->
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 🌟 MODAL 2: ฟอร์มรับเข้าบัญชีวัสดุ -->
-                <div id="receive-material-modal" class="hidden fixed inset-0 z-[90] bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4 fade-in">
-                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[95vh] overflow-hidden">
-                        <div class="bg-emerald-600 text-white p-4 flex justify-between items-center shrink-0">
-                            <h3 class="font-bold flex items-center gap-2"><i data-lucide="package-plus" class="w-5 h-5"></i> ลงบัญชีวัสดุสิ้นเปลือง / วัสดุคงทน</h3>
-                            <button onclick="document.getElementById('receive-material-modal').classList.add('hidden')" class="text-white hover:bg-white/20 p-1 rounded-lg transition"><i data-lucide="x" class="w-5 h-5"></i></button>
-                        </div>
-                        <div class="p-6 overflow-y-auto space-y-4 flex-1">
-                            <input type="hidden" id="r_mat_proc_id">
-                            <input type="hidden" id="r_mat_item_idx">
-                            <input type="hidden" id="r_mat_price">
-                            <input type="hidden" id="r_mat_unit">
-                            
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div class="md:col-span-2"><label class="block text-sm font-bold text-slate-700 mb-1">รหัสพัสดุ</label><input type="text" id="r_mat_code" readonly class="w-full border border-slate-200 bg-slate-100 rounded-xl px-4 py-2.5 text-slate-500 font-medium"></div>
-                                <div class="md:col-span-2"><label class="block text-sm font-bold text-slate-700 mb-1">ชื่อพัสดุ</label><input type="text" id="r_mat_name" readonly class="w-full border border-slate-200 bg-slate-100 rounded-xl px-4 py-2.5 text-slate-500 font-medium"></div>
-                                <div><label class="block text-sm font-bold text-slate-700 mb-1">จำนวนอย่างสูง <span class="text-red-500">*</span></label><input type="number" id="r_mat_max" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 outline-none focus:border-emerald-500"></div>
-                                <div><label class="block text-sm font-bold text-slate-700 mb-1">จำนวนอย่างต่ำ <span class="text-red-500">*</span></label><input type="number" id="r_mat_min" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 outline-none focus:border-emerald-500"></div>
-                                <div class="md:col-span-2"><label class="block text-sm font-bold text-slate-700 mb-1">รายละเอียดพัสดุ (ถ้าไม่มีให้ใส่ -) <span class="text-red-500">*</span></label><input type="text" id="r_mat_detail" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 outline-none focus:border-emerald-500"></div>
-                                <div class="md:col-span-2"><label class="block text-sm font-bold text-slate-700 mb-1">สถานที่เก็บ (ถ้าไม่มีให้ใส่ -) <span class="text-red-500">*</span></label><input type="text" id="r_mat_loc" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 outline-none focus:border-emerald-500"></div>
-                                <div class="md:col-span-2"><label class="block text-sm font-bold text-slate-700 mb-1">ข้อมูลผู้ขาย</label><input type="text" id="r_mat_vendor" readonly class="w-full border border-slate-200 bg-slate-100 rounded-xl px-4 py-2.5 text-slate-500 font-medium"></div>
-                                <div><label class="block text-sm font-bold text-slate-700 mb-1">เลขที่เอกสารรับเข้า <span class="text-red-500">*</span></label><input type="text" id="r_mat_docno" placeholder="เช่น ร ......./2567" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 outline-none focus:border-emerald-500"></div>
-                                <div><label class="block text-sm font-bold text-slate-700 mb-1">วันที่ลงรับเข้า <span class="text-red-500">*</span></label><input type="date" id="r_mat_date" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 outline-none focus:border-emerald-500"></div>
-                                <div class="md:col-span-2"><label class="block text-sm font-bold text-slate-700 mb-1">จำนวนที่รับเข้า</label><input type="text" id="r_mat_qty" readonly class="w-full border border-emerald-200 bg-emerald-50 rounded-xl px-4 py-2.5 text-emerald-700 font-bold text-center text-lg"></div>
-                            </div>
-                        </div>
-                        <div class="bg-slate-50 p-4 border-t border-slate-200 flex justify-center gap-3 shrink-0">
-                            <button onclick="window.saveReceiveMaterial()" class="bg-emerald-500 hover:bg-emerald-600 text-white px-8 py-2.5 rounded-xl font-bold shadow-md transition">รับเข้าพัสดุ</button>
-                            <button onclick="document.getElementById('receive-material-modal').classList.add('hidden')" class="bg-rose-500 hover:bg-rose-600 text-white px-8 py-2.5 rounded-xl font-bold shadow-md transition">ปิดหน้าต่าง</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 🌟 MODAL 3: ฟอร์มรับเข้าครุภัณฑ์ -->
-                <div id="receive-asset-modal" class="hidden fixed inset-0 z-[90] bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4 fade-in">
-                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl flex flex-col max-h-[95vh] overflow-hidden">
-                        <div class="bg-blue-600 text-white p-4 flex justify-between items-center shrink-0">
-                            <h3 class="font-bold flex items-center gap-2"><i data-lucide="monitor" class="w-5 h-5"></i> ลงทะเบียนคุมทรัพย์สิน (ครุภัณฑ์)</h3>
-                            <button onclick="document.getElementById('receive-asset-modal').classList.add('hidden')" class="text-white hover:bg-white/20 p-1 rounded-lg transition"><i data-lucide="x" class="w-5 h-5"></i></button>
-                        </div>
-                        <div class="p-6 overflow-y-auto space-y-4 flex-1">
-                            <input type="hidden" id="r_asset_proc_id">
-                            <input type="hidden" id="r_asset_item_idx">
-                            
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div><label class="block text-sm font-bold text-slate-700 mb-1">ปีงบประมาณที่ได้มา</label><input type="text" id="r_asset_year" readonly class="w-full border border-slate-200 bg-slate-100 rounded-xl px-4 py-2.5 text-slate-500 font-medium"></div>
-                                <div class="hidden md:block"></div>
-                                
-                                <div><label class="block text-sm font-bold text-slate-700 mb-1">รหัสประเภทครุภัณฑ์</label><input type="text" id="r_asset_catcode" readonly class="w-full border border-slate-200 bg-slate-100 rounded-xl px-4 py-2.5 text-slate-500 font-medium"></div>
-                                <div><label class="block text-sm font-bold text-slate-700 mb-1">ชื่อประเภทครุภัณฑ์</label><input type="text" id="r_asset_catname" readonly class="w-full border border-slate-200 bg-slate-100 rounded-xl px-4 py-2.5 text-slate-500 font-medium"></div>
-                                
-                                <div><label class="block text-sm font-bold text-slate-700 mb-1">รหัสครุภัณฑ์ (สำหรับระบบ) <span class="text-red-500">*</span></label><input type="text" id="r_asset_code" placeholder="เช่น ยธ. 001/001/67-1" class="w-full border border-blue-300 rounded-xl px-4 py-2.5 outline-none focus:border-blue-500 font-bold text-blue-700 bg-blue-50/30"></div>
-                                <div><label class="block text-sm font-bold text-slate-700 mb-1">ชื่อครุภัณฑ์</label><input type="text" id="r_asset_name" readonly class="w-full border border-slate-200 bg-slate-100 rounded-xl px-4 py-2.5 text-slate-500 font-medium"></div>
-                                
-                                <div class="md:col-span-2"><label class="block text-sm font-bold text-slate-700 mb-1">คุณลักษณะ / คำอธิบาย <span class="text-red-500">*</span></label><textarea id="r_asset_desc" rows="2" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 outline-none focus:border-blue-500"></textarea></div>
-                                <div class="md:col-span-2"><label class="block text-sm font-bold text-slate-700 mb-1">สถานที่ตั้ง / หน่วยงานรับผิดชอบ <span class="text-red-500">*</span></label><input type="text" id="r_asset_loc" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 outline-none focus:border-blue-500"></div>
-                                
-                                <div class="md:col-span-2"><label class="block text-sm font-bold text-slate-700 mb-1">ชื่อผู้ขาย / ผู้รับจ้าง</label><input type="text" id="r_asset_vendor" readonly class="w-full border border-slate-200 bg-slate-100 rounded-xl px-4 py-2.5 text-slate-500 font-medium"></div>
-                                
-                                <div>
-                                    <label class="block text-sm font-bold text-slate-700 mb-1">ประเภทเงิน <span class="text-red-500">*</span></label>
-                                    <select id="r_asset_fund" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 outline-none focus:border-blue-500 bg-white">
-                                        <option value="เงินงบประมาณ">เงินงบประมาณ</option>
-                                        <option value="เงินนอกงบประมาณ">เงินนอกงบประมาณ</option>
-                                        <option value="เงินบริจาค">เงินบริจาค</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-bold text-slate-700 mb-1">วิธีที่ได้มา <span class="text-red-500">*</span></label>
-                                    <select id="r_asset_method" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 outline-none focus:border-blue-500 bg-white">
-                                        <option value="เฉพาะเจาะจง">เฉพาะเจาะจง</option>
-                                        <option value="ประกาศเชิญชวนทั่วไป">ประกาศเชิญชวนทั่วไป</option>
-                                        <option value="คัดเลือก">คัดเลือก</option>
-                                        <option value="รับบริจาค">รับบริจาค</option>
-                                    </select>
-                                </div>
-                                
-                                <div><label class="block text-sm font-bold text-slate-700 mb-1">หน่วยนับ</label><input type="text" id="r_asset_unit" readonly class="w-full border border-slate-200 bg-slate-100 rounded-xl px-4 py-2.5 text-slate-500 font-medium text-center"></div>
-                                <div><label class="block text-sm font-bold text-slate-700 mb-1">อายุการใช้งาน (ปี) <span class="text-red-500">*</span></label><input type="number" id="r_asset_life" value="5" oninput="window.calcExpireDate()" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 outline-none focus:border-blue-500 text-center font-bold"></div>
-                                
-                                <div><label class="block text-sm font-bold text-slate-700 mb-1">วันที่ได้มา <span class="text-red-500">*</span></label><input type="date" id="r_asset_acq_date" onchange="window.calcExpireDate()" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 outline-none focus:border-blue-500"></div>
-                                <div><label class="block text-sm font-bold text-slate-700 mb-1">วันหมดอายุการใช้งาน (คำนวณอัตโนมัติ)</label><input type="date" id="r_asset_exp_date" readonly class="w-full border border-slate-200 bg-slate-100 rounded-xl px-4 py-2.5 text-slate-500 font-medium"></div>
-                                
-                                <div><label class="block text-sm font-bold text-slate-700 mb-1">ราคาครุภัณฑ์ (บาท)</label><input type="text" id="r_asset_price" readonly class="w-full border border-slate-200 bg-slate-100 rounded-xl px-4 py-2.5 text-slate-700 font-bold text-right text-lg"></div>
-                                <div>
-                                    <label class="block text-sm font-bold text-slate-700 mb-1">บันทึกรายการแบบ</label>
-                                    <select id="r_asset_record_type" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 outline-none focus:border-blue-500 bg-white">
-                                        <option value="บันทึกอัตโนมัติ">บันทึกอัตโนมัติ</option>
-                                        <option value="บันทึกด้วยตนเอง">บันทึกด้วยตนเอง</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="bg-slate-50 p-4 border-t border-slate-200 flex justify-center gap-3 shrink-0">
-                            <button onclick="window.saveReceiveAsset()" class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-2.5 rounded-xl font-bold shadow-md transition">บันทึกครุภัณฑ์</button>
-                            <button onclick="document.getElementById('receive-asset-modal').classList.add('hidden')" class="bg-slate-400 hover:bg-slate-500 text-white px-8 py-2.5 rounded-xl font-bold shadow-md transition">ปิดหน้าต่าง</button>
-                        </div>
-                    </div>
-                </div>
             `;
             window.renderProcTabContent();
             lucide.createIcons();
         }
-		
-		window.changeProcTab = (tab) => { 
+
+        window.changeProcTab = (tab) => { 
             procActiveTab = tab; 
             window.navigate('procurement'); 
         }
@@ -1735,7 +1622,6 @@
                     `;
                 });
                 
-                // 🌟 เพิ่มปุ่มพิมพ์ทะเบียนคุมด้านบนตาราง
                 const titleText = procActiveTab === 'buy' ? 'ทะเบียนคุมการจัดซื้อ' : 'ทะเบียนคุมการจัดจ้าง';
                 const printGlobalBtn = `<div class="mb-4 flex justify-end"><button onclick="window.printProcurementRegister('${procActiveTab}')" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl text-sm font-bold shadow-md transition flex items-center gap-2"><i data-lucide="printer" class="w-4 h-4"></i> พิมพ์${titleText}</button></div>`;
                 
@@ -1743,8 +1629,8 @@
             }
             lucide.createIcons();
         }
-		
-		// 🌟 ฟังก์ชันพิมพ์ทะเบียนคุมการจัดซื้อ/จัดจ้าง แบบรวมทั้งปีงบประมาณ (ปรับขนาดฟอนต์และยกเลิกตัวหนา)
+
+        // 🌟 ฟังก์ชันพิมพ์ทะเบียนคุมการจัดซื้อ/จัดจ้าง แบบรวมทั้งปีงบประมาณ
         window.printProcurementRegister = async (type) => {
             showLoader();
             const { data: school } = await supabaseClient.from('school_info').select('*').limit(1).single();
@@ -1753,7 +1639,6 @@
             const schoolName = school ? school.name : 'โรงเรียน.........................';
             const academicYear = window.sysAcademicYear || (new Date().getFullYear() + 543);
             
-            // แยกข้อมูลตามประเภทแท็บที่กด
             const list = type === 'buy' ? window.procBuyList : window.procHireList;
             const title = type === 'buy' ? 'ทะเบียนคุมการจัดซื้อ' : 'ทะเบียนคุมการจัดจ้าง';
             const orderHeader = type === 'buy' ? 'เลขที่ใบสั่งซื้อ' : 'เลขที่ใบสั่งจ้าง';
@@ -1762,7 +1647,6 @@
                 return Swal.fire({ icon: 'info', title: 'ไม่มีข้อมูล', text: 'ยังไม่มีรายการจัดซื้อ/จัดจ้างให้พิมพ์ครับ' });
             }
 
-            // แปลงอารบิกเป็นเลขไทย
             const toThaiNum = (str) => {
                 if(!str && str !== 0) return '';
                 return String(str).replace(/\d/g, d => '๐๑๒๓๔๕๖๗๘๙'[d]);
@@ -1790,7 +1674,6 @@
                 `;
             });
 
-            // เติมแถวว่างให้เต็มหน้ากระดาษ A4 (ประมาณ 18 แถวเพราะตัวหนังสือเล็กลง)
             const minRows = 18;
             if (list.length < minRows) {
                 for (let i = list.length; i < minRows; i++) {
@@ -1805,15 +1688,11 @@
                     <title>${title}</title>
                     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap" rel="stylesheet">
                     <style>
-                        /* 🌟 ปรับขนาดฟอนต์ของเอกสารลงเหลือ 12pt (หัวกระดาษ 14pt) */
                         body { font-family: 'Sarabun', sans-serif; margin: 0; padding: 20px; font-size: 12pt; color: #000; line-height: 1.5; }
                         @page { size: A4 portrait; margin: 15mm; }
                         table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 12pt; }
-                        
-                        /* 🌟 บังคับให้หัวตาราง (th) และข้อมูลในตาราง (td) เป็นตัวอักษรธรรมดา ไม่หนา */
                         th, td { border: 1px solid #000; padding: 4px 8px; font-weight: normal; }
                         th { text-align: center; }
-                        
                         .text-center { text-align: center; }
                         .text-left { text-align: left !important; padding-left: 8px; }
                         .text-right { text-align: right !important; padding-right: 8px; }
@@ -1866,10 +1745,21 @@
         }
 
         const pInput = (label, id, type='text', extra='') => `<div><label class="block text-xs font-bold text-slate-700 mb-1">${label}</label><input type="${type}" id="${id}" class="w-full border border-slate-300 rounded-lg px-3 py-2 outline-none focus:border-indigo-500 bg-white" ${extra}></div>`;
-        
+
+        // 🌟 เพิ่มฟังก์ชันคำนวณวันครบกำหนด (นับ 30 วันจากวันที่จัดจ้าง)
+        window.calcEmpDueDate = () => {
+            const qDate = document.getElementById('p_emp_q_date')?.value;
+            if (qDate) {
+                const d = new Date(qDate);
+                d.setDate(d.getDate() + 30);
+                const dueInput = document.getElementById('p_emp_due_date');
+                if (dueInput) dueInput.value = d.toISOString().split('T')[0];
+            }
+        }
+
         window.openProcModal = async (expenseId = null, editId = null) => {
             procCurrentExpenseId = expenseId;
-            let exp = {}; // 🌟 รองรับฟอร์มเปล่ากรณีแอดมินกด "เพิ่มข้อมูลใหม่"
+            let exp = {}; 
             
             if (expenseId) {
                 showLoader();
@@ -1898,12 +1788,12 @@
                 vendorOptions += `<option value="${v.id}" ${getVal('vendor_id', '') == v.id ? 'selected' : ''}>${v.vendor_name}</option>`;
             });
 
-            // 🌟 ซ่อนป้ายดูไฟล์แนบ หากเป็นการเพิ่มข้อมูลใหม่เอง
             const fileDisplay = exp.file_url 
                 ? `<a href="${exp.file_url}" target="_blank" class="text-xs bg-indigo-50 text-indigo-600 border border-indigo-200 px-3 py-1.5 rounded-lg font-bold hover:bg-indigo-100 transition inline-flex items-center gap-1 mb-2"><i data-lucide="paperclip" class="w-3.5 h-3.5"></i> ดูไฟล์แนบจากใบขอเบิก</a>` 
                 : (expenseId ? `<span class="text-xs text-slate-400">ไม่มีไฟล์แนบจากใบขอเบิก</span>` : ``);
 
             const defaultProcType = exp.expense_type === 'จัดจ้าง' ? 'จ้าง' : 'ซื้อ';
+            const initialType = getVal('procurement_type', defaultProcType);
 
             document.getElementById('proc_form_body').innerHTML = `
                 <input type="hidden" id="p_id" value="${editId || ''}">
@@ -1918,9 +1808,10 @@
                         ${pInput('ปีงบประมาณ', 'p_year', 'text', `value="${getVal('academic_year', window.sysAcademicYear)}" oninput="window.previewPoNumber()"`)}
                         <div>
                             <label class="block text-xs font-bold text-slate-700 mb-1">ประเภทของงาน</label>
-                            <select id="p_type" class="w-full border border-slate-300 rounded-lg px-3 py-2 outline-none focus:border-indigo-500 bg-white" onchange="window.previewPoNumber(); window.togglePart8();">
-                                <option value="ซื้อ" ${getVal('procurement_type', defaultProcType) === 'ซื้อ' ? 'selected' : ''}>ซื้อ</option>
-                                <option value="จ้าง" ${getVal('procurement_type', defaultProcType) === 'จ้าง' ? 'selected' : ''}>จ้าง</option>
+                            <select id="p_type" class="w-full border border-slate-300 rounded-lg px-3 py-2 outline-none focus:border-indigo-500 bg-white" onchange="window.previewPoNumber(); window.toggleProcForm();">
+                                <option value="ซื้อ" ${initialType === 'ซื้อ' ? 'selected' : ''}>ซื้อ</option>
+                                <option value="จ้าง" ${initialType === 'จ้าง' ? 'selected' : ''}>จ้าง</option>
+                                <option value="จ้างบุคลากร" ${initialType === 'จ้างบุคลากร' ? 'selected' : ''}>จ้างบุคลากร</option>
                             </select>
                         </div>
                         ${pInput('วันที่บันทึกรายงาน', 'p_report_date', 'date', `value="${getVal('report_date', exp.doc_date || today)}"`)}
@@ -1937,78 +1828,137 @@
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    <div class="bg-white border border-amber-200 rounded-xl overflow-hidden shadow-sm">
-                        <div class="bg-amber-50 p-2.5 border-b border-amber-200 text-amber-800 font-bold text-sm">ส่วนที่ 2 ข้อมูลใบเสนอราคา</div>
-                        <div class="p-4 space-y-3">
-                            ${pInput('วันที่ในใบเสนอราคา', 'p_q_date', 'date', `value="${getVal('quotation_date', today)}"`)}
+                <!-- 🌟 FORM STANDARD (ซื้อ/จ้าง ทั่วไป) -->
+                <div id="form_standard" class="space-y-4 mt-4">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <div class="bg-white border border-amber-200 rounded-xl overflow-hidden shadow-sm">
+                            <div class="bg-amber-50 p-2.5 border-b border-amber-200 text-amber-800 font-bold text-sm">ส่วนที่ 2 ข้อมูลใบเสนอราคา</div>
+                            <div class="p-4 space-y-3">
+                                ${pInput('วันที่ในใบเสนอราคา', 'p_q_date', 'date', `value="${getVal('quotation_date', today)}"`)}
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-700 mb-1">ผู้รับจ้าง/ผู้ขาย</label>
+                                    <select id="p_v_id" class="w-full border border-slate-300 rounded-lg px-3 py-2 outline-none focus:border-indigo-500 bg-white">
+                                        ${vendorOptions}
+                                    </select>
+                                </div>
+                                ${pInput('ราคาที่เสนอ (บาท)', 'p_q_price', 'number', `value="${getVal('quotation_price', exp.total_amount || 0)}"`)}
+                                <div class="flex gap-4">
+                                    <div class="flex-1">${pInput('อายุใบเสนอราคา(วัน)', 'p_q_age', 'number', `value="${getVal('quotation_age', '30')}"`)}</div>
+                                    <div class="flex-1">${pInput('ระยะเวลาส่งมอบ(วัน)', 'p_v_del_dur', 'number', `value="${getVal('delivery_duration', '')}"`)}</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="space-y-4">
+                            <div class="bg-white border border-emerald-200 rounded-xl overflow-hidden shadow-sm">
+                                <div class="bg-emerald-50 p-2.5 border-b border-emerald-200 text-emerald-800 font-bold text-sm">ส่วนที่ 3 ข้อมูลประกาศผู้ชนะ</div>
+                                <div class="p-4">${pInput('วันที่ประกาศผู้ชนะ', 'p_win_date', 'date', `value="${getVal('winner_date', exp.doc_date || today)}"`)}</div>
+                            </div>
+                            <div class="bg-white border border-indigo-200 rounded-xl overflow-hidden shadow-sm">
+                                <div class="bg-indigo-50 p-2.5 border-b border-indigo-200 text-indigo-800 font-bold text-sm">ส่วนที่ 4 ผลการพิจารณาและอนุมัติสั่งซื้อ/จ้าง</div>
+                                <div class="p-4">${pInput('วันที่บันทึกข้อความรายงานพิจารณาฯ', 'p_app_date', 'date', `value="${getVal('approval_date', exp.doc_date || today)}"`)}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="bg-white border border-slate-300 rounded-xl p-4 shadow-sm">
+                            <h4 class="font-bold text-slate-800 text-sm mb-3">ส่วนที่ 6 ข้อมูลใบตรวจรับ</h4>
+                            <div class="grid grid-cols-2 gap-3">
+                                ${pInput('วันที่ครบกำหนดส่งมอบ', 'p_due_date', 'date', `value="${getVal('due_date', '')}"`)}
+                                ${pInput('วันที่ส่งมอบ', 'p_del_date', 'date', `value="${getVal('delivery_date', '')}"`)}
+                                ${pInput('ส่งงานเกินกำหนด(วัน)', 'p_late_days', 'number', `value="${getVal('late_days', '0')}"`)}
+                                ${pInput('วันที่ตรวจรับงาน', 'p_insp_date', 'date', `value="${getVal('inspection_date', '')}"`)}
+                            </div>
+                        </div>
+                        <div class="bg-white border border-slate-300 rounded-xl p-4 shadow-sm">
+                            <h4 class="font-bold text-slate-800 text-sm mb-3">ส่วนที่ 7 บันทึกรายงานผล</h4>
+                            ${pInput('วันที่บันทึกรายงานผล', 'p_note_date', 'date', `value="${getVal('report_note_date', '')}"`)}
+                        </div>
+                    </div>
+
+                    <div id="part8_container" class="bg-white border border-pink-200 rounded-xl overflow-hidden shadow-sm transition-all duration-300">
+                        <div class="bg-pink-50 p-2.5 border-b border-pink-200 text-pink-800 font-bold text-sm">ส่วนที่ 8 การสร้างใบเบิกพัสดุ (เชื่อมโยงอัตโนมัติ)</div>
+                        <div class="p-4 grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-1">สร้างใบเบิกอัตโนมัติ</label>
+                                <select id="p_req_auto" class="w-full border border-slate-300 rounded-lg px-3 py-2 outline-none focus:border-indigo-500">
+                                    <option value="ต้องการ" ${getVal('auto_requisition', 'ต้องการ') === 'ต้องการ' ? 'selected' : ''}>ต้องการ</option>
+                                    <option value="ไม่ต้องการ" ${getVal('auto_requisition', '') === 'ไม่ต้องการ' ? 'selected' : ''}>ไม่ต้องการ</option>
+                                </select>
+                            </div>
+                            ${pInput('ผู้เบิกพัสดุ', 'p_req_name', 'text', `value="${getVal('requester_name', exp.requester_name || '')}"`)}
+                            ${pInput('วันที่ใบเบิกพัสดุ', 'p_req_date', 'date', `value="${getVal('requisition_date', today)}"`)}
+                            ${pInput('เหตุผลขอเบิก', 'p_req_reason', 'text', `value="${getVal('requisition_reason', getVal('reason', ''))}" readonly class="bg-slate-50"`)}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 🌟 FORM PERSONNEL (จ้างบุคลากร) -->
+                <div id="form_personnel" class="space-y-4 mt-4 hidden">
+                    <div class="bg-white border border-pink-200 rounded-xl overflow-hidden shadow-sm">
+                        <div class="bg-pink-50 p-2.5 border-b border-pink-200 text-pink-800 font-bold text-sm">ส่วนที่ 2 ข้อมูลผู้จ้าง</div>
+                        <div class="p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                            ${pInput('วันที่จัดจ้าง', 'p_emp_q_date', 'date', `value="${getVal('quotation_date', today)}" onchange="window.calcEmpDueDate()"`)}
                             <div>
                                 <label class="block text-xs font-bold text-slate-700 mb-1">ผู้รับจ้าง/ผู้ขาย</label>
-                                <select id="p_v_id" class="w-full border border-slate-300 rounded-lg px-3 py-2 outline-none focus:border-indigo-500 bg-white">
+                                <select id="p_emp_v_id" class="w-full border border-slate-300 rounded-lg px-3 py-2 outline-none focus:border-indigo-500 bg-white">
                                     ${vendorOptions}
                                 </select>
                             </div>
-                            ${pInput('ราคาที่เสนอ (บาท)', 'p_q_price', 'number', `value="${getVal('quotation_price', exp.total_amount || 0)}"`)}
-                            <div class="flex gap-4">
-                                <div class="flex-1">${pInput('อายุใบเสนอราคา(วัน)', 'p_q_age', 'number', `value="${getVal('quotation_age', '30')}"`)}</div>
-                                <div class="flex-1">${pInput('ระยะเวลาส่งมอบ(วัน)', 'p_v_del_dur', 'number', `value="${getVal('delivery_duration', '')}"`)}</div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-1">ตำแหน่ง</label>
+                                <select id="p_emp_position" class="w-full border border-slate-300 rounded-lg px-3 py-2 outline-none focus:border-indigo-500 bg-white">
+                                    <option value="ครูอัตราจ้าง" ${getVal('emp_position','')==='ครูอัตราจ้าง'?'selected':''}>ครูอัตราจ้าง</option>
+                                    <option value="ครูต่างชาติ" ${getVal('emp_position','')==='ครูต่างชาติ'?'selected':''}>ครูต่างชาติ</option>
+                                    <option value="นักการภารโรง" ${getVal('emp_position','')==='นักการภารโรง'?'selected':''}>นักการภารโรง</option>
+                                    <option value="แม่บ้าน" ${getVal('emp_position','')==='แม่บ้าน'?'selected':''}>แม่บ้าน</option>
+                                </select>
                             </div>
+                            ${pInput('ราคาที่เสนอ (บาท)', 'p_emp_q_price', 'number', `value="${getVal('quotation_price', exp.total_amount || 0)}" readonly class="bg-slate-50 font-bold text-red-500"`)}
+                            ${pInput('เวลากำหนดส่ง(วัน)', 'p_emp_del_dur', 'number', `value="${getVal('delivery_duration', '')}"`)}
                         </div>
                     </div>
-                    
-                    <div class="space-y-4">
-                        <div class="bg-white border border-emerald-200 rounded-xl overflow-hidden shadow-sm">
-                            <div class="bg-emerald-50 p-2.5 border-b border-emerald-200 text-emerald-800 font-bold text-sm">ส่วนที่ 3 ข้อมูลประกาศผู้ชนะ</div>
-                            <div class="p-4">${pInput('วันที่ประกาศผู้ชนะ', 'p_win_date', 'date', `value="${getVal('winner_date', exp.doc_date || today)}"`)}</div>
+
+                    <div class="bg-white border border-purple-200 rounded-xl overflow-hidden shadow-sm">
+                        <div class="bg-purple-50 p-2.5 border-b border-purple-200 text-purple-800 font-bold text-sm">ส่วนที่ 3 ข้อมูลสัญญาจ้าง</div>
+                        <div class="p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                            ${pInput('สัญญาจ้าง', 'p_emp_contract_no', 'text', `value="${getVal('contract_no', '')}"`)}
+                            ${pInput('คำสั่งจ้าง', 'p_emp_order_no', 'text', `value="${getVal('order_no', '')}"`)}
+                            <!-- 🌟 ปลดล็อก readonly ออก เพื่อให้แอดมินแก้ไขวงเงินได้เอง -->
+                            ${pInput('วงเงิน (บาท)', 'p_emp_contract_amt', 'number', `value="${getVal('contract_limit', '')}"`)}
+                            ${pInput('ตั้งแต่วันที่', 'p_emp_contract_start', 'date', `value="${getVal('contract_start', '')}"`)}
+                            ${pInput('ถึงวันที่', 'p_emp_contract_end', 'date', `value="${getVal('contract_end', '')}"`)}
                         </div>
-                        <div class="bg-white border border-indigo-200 rounded-xl overflow-hidden shadow-sm">
-                            <div class="bg-indigo-50 p-2.5 border-b border-indigo-200 text-indigo-800 font-bold text-sm">ส่วนที่ 4 ผลการพิจารณาและอนุมัติสั่งซื้อ/จ้าง</div>
-                            <div class="p-4">${pInput('วันที่บันทึกข้อความรายงานพิจารณาฯ', 'p_app_date', 'date', `value="${getVal('approval_date', exp.doc_date || today)}"`)}</div>
+                    </div>
+
+                    <div class="bg-white border border-teal-200 rounded-xl overflow-hidden shadow-sm">
+                        <div class="bg-teal-50 p-2.5 border-b border-teal-200 text-teal-800 font-bold text-sm">ส่วนที่ 4 ข้อมูลระยะเวลา</div>
+                        <div class="p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                            ${pInput('ประจำเดือน', 'p_emp_work_month', 'text', `value="${getVal('work_month', '')}" placeholder="เช่น มกราคม 2567"`)}
+                            ${pInput('วันแรกของเดือน', 'p_emp_work_start', 'date', `value="${getVal('work_start', '')}"`)}
+                            ${pInput('วันสุดท้ายของเดือน', 'p_emp_work_end', 'date', `value="${getVal('work_end', '')}"`)}
+                            ${pInput('วันครบกำหนด (นับ 30 วัน)', 'p_emp_due_date', 'date', `value="${getVal('due_date', '')}" readonly class="bg-slate-50"`)}
+                            ${pInput('วันตรวจรับ', 'p_emp_insp_date', 'date', `value="${getVal('inspection_date', '')}"`)}
                         </div>
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <!-- 🌟 ส่วนที่ 5 ข้อมูลใบสั่งซื้อ/จ้าง (ใช้ร่วมกัน) -->
+                <div class="grid grid-cols-1 gap-4 mt-4">
                     <div class="bg-white border border-slate-300 rounded-xl p-4 shadow-sm">
-                        <h4 class="font-bold text-slate-800 text-sm mb-3">ส่วนที่ 5 ข้อมูลใบสั่งซื้อ/จ้าง</h4>
-                        ${pInput('เลขที่คำสั่งซื้อ/จ้าง (รันอัตโนมัติ)', 'p_po_num', 'text', `value="${getVal('po_number', '')}" readonly class="bg-slate-100 font-bold text-blue-600"`)}
-                        <div class="mt-3">${pInput('วันที่ใบสั่งซื้อ/จ้าง', 'p_po_date', 'date', `value="${getVal('po_date', exp.doc_date || today)}"`)}</div>
-                    </div>
-                    <div class="bg-white border border-slate-300 rounded-xl p-4 shadow-sm lg:col-span-2">
-                        <h4 class="font-bold text-slate-800 text-sm mb-3">ส่วนที่ 6 ข้อมูลใบตรวจรับ</h4>
-                        <div class="grid grid-cols-2 gap-3">
-                            ${pInput('วันที่ครบกำหนดส่งมอบ', 'p_due_date', 'date', `value="${getVal('due_date', '')}"`)}
-                            ${pInput('วันที่ส่งมอบ', 'p_del_date', 'date', `value="${getVal('delivery_date', '')}"`)}
-                            ${pInput('ส่งงานเกินกำหนด(วัน)', 'p_late_days', 'number', `value="${getVal('late_days', '0')}"`)}
-                            ${pInput('วันที่ตรวจรับงาน', 'p_insp_date', 'date', `value="${getVal('inspection_date', '')}"`)}
+                        <h4 class="font-bold text-slate-800 text-sm mb-3">ส่วนที่ 5 ข้อมูลเลขคำสั่งจ้าง / ใบสั่งซื้อ</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            ${pInput('เลขที่คำสั่งซื้อ/จ้าง (รันอัตโนมัติ)', 'p_po_num', 'text', `value="${getVal('po_number', '')}" readonly class="bg-slate-100 font-bold text-blue-600"`)}
+                            ${pInput('วันที่ใบสั่งซื้อ/จ้าง', 'p_po_date', 'date', `value="${getVal('po_date', exp.doc_date || today)}"`)}
                         </div>
-                    </div>
-                    <div class="bg-white border border-slate-300 rounded-xl p-4 shadow-sm">
-                        <h4 class="font-bold text-slate-800 text-sm mb-3">ส่วนที่ 7 บันทึกรายงานผล</h4>
-                        ${pInput('วันที่บันทึกรายงานผล', 'p_note_date', 'date', `value="${getVal('report_note_date', '')}"`)}
                     </div>
                 </div>
 
-                <div id="part8_container" class="bg-white border border-pink-200 rounded-xl overflow-hidden shadow-sm transition-all duration-300">
-                    <div class="bg-pink-50 p-2.5 border-b border-pink-200 text-pink-800 font-bold text-sm">ส่วนที่ 8 การสร้างใบเบิกพัสดุ (เชื่อมโยงอัตโนมัติ)</div>
-                    <div class="p-4 grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                        <div>
-                            <label class="block text-xs font-bold text-slate-700 mb-1">สร้างใบเบิกอัตโนมัติ</label>
-                            <select id="p_req_auto" class="w-full border border-slate-300 rounded-lg px-3 py-2 outline-none focus:border-indigo-500">
-                                <option value="ต้องการ" ${getVal('auto_requisition', 'ต้องการ') === 'ต้องการ' ? 'selected' : ''}>ต้องการ</option>
-                                <option value="ไม่ต้องการ" ${getVal('auto_requisition', '') === 'ไม่ต้องการ' ? 'selected' : ''}>ไม่ต้องการ</option>
-                            </select>
-                        </div>
-                        ${pInput('ผู้เบิกพัสดุ', 'p_req_name', 'text', `value="${getVal('requester_name', exp.requester_name || '')}"`)}
-                        ${pInput('วันที่ใบเบิกพัสดุ', 'p_req_date', 'date', `value="${getVal('requisition_date', today)}"`)}
-                        ${pInput('เหตุผลขอเบิก', 'p_req_reason', 'text', `value="${getVal('requisition_reason', getVal('reason', ''))}" readonly class="bg-slate-50"`)}
-                    </div>
-                </div>
-
-                <!-- 🌟 เพิ่มปุ่มเพิ่มรายการวัสดุ กรณีแอดมินสร้างบิลเอง -->
-                <div class="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                <!-- 🌟 ส่วนที่ 6 ตารางรายการที่จัดซื้อ/จ้าง (ใช้ร่วมกัน) -->
+                <div class="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm mt-4">
                     <div class="bg-slate-100 p-2.5 border-b border-slate-200 font-bold text-slate-700 text-sm flex justify-between items-center">
-                        <div><i data-lucide="list" class="w-4 h-4 inline mr-1"></i> รายการที่จัดซื้อ/จัดจ้าง</div>
+                        <div><i data-lucide="list" class="w-4 h-4 inline mr-1"></i> ส่วนที่ 6 รายการที่จัดซื้อ/จัดจ้าง</div>
                         <button type="button" onclick="window.addProcItem()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-md text-xs font-medium transition flex items-center gap-1 shadow-sm"><i data-lucide="plus" class="w-3 h-3"></i> เพิ่มรายการ</button>
                     </div>
                     <div class="overflow-x-auto p-2">
@@ -2029,87 +1979,66 @@
             `;
 
             window.renderProcItems();
-            
-            window.togglePart8(); 
+            window.toggleProcForm(); 
 
-            if(!editId) window.previewPoNumber();
+            // 🌟 เพิ่มให้สั่งคำนวณวันครบกำหนด 30 วัน ทันทีที่เปิดฟอร์มใหม่
+            if(!editId) {
+                window.previewPoNumber();
+                window.calcEmpDueDate(); 
+            }
             document.getElementById('proc-modal').classList.remove('hidden');
             lucide.createIcons();
         }
 
-        // 🌟 ฟังก์ชันใหม่สำหรับซ่อน/แสดง ส่วนที่ 8 
-        window.togglePart8 = () => {
+        // 🌟 ฟังก์ชันจัดการซ่อน/แสดง ฟอร์ม จ้างบุคลากร
+        window.toggleProcForm = () => {
             const type = document.getElementById('p_type')?.value;
+            const standardForm = document.getElementById('form_standard');
+            const personnelForm = document.getElementById('form_personnel');
             const part8 = document.getElementById('part8_container');
-            if (part8) {
-                if (type === 'จ้าง') {
-                    part8.classList.add('hidden');
-                } else {
-                    part8.classList.remove('hidden');
-                }
+
+            if (type === 'จ้างบุคลากร') {
+                standardForm.classList.add('hidden');
+                personnelForm.classList.remove('hidden');
+                if(part8) part8.classList.add('hidden');
+            } else if (type === 'จ้าง') {
+                standardForm.classList.remove('hidden');
+                personnelForm.classList.add('hidden');
+                if(part8) part8.classList.add('hidden');
+            } else {
+                standardForm.classList.remove('hidden');
+                personnelForm.classList.add('hidden');
+                if(part8) part8.classList.remove('hidden');
             }
         }
 
         window.previewPoNumber = async () => {
-            if (document.getElementById('p_id').value) return; // ถ้าเป็นการแก้ไขไม่ต้องรันเลขใหม่
+            if (document.getElementById('p_id').value) return; 
             const type = document.getElementById('p_type').value;
             const year = document.getElementById('p_year').value;
             
             if(type && year) {
-                // 🌟 เปลี่ยนจากการนับแถว เป็นดึงข้อมูลใบล่าสุด (ID สูงสุด) ของปีนั้นและประเภทนั้น
+                // 🌟 ให้จ้างบุคลากร รันเลขร่วมกับจ้าง
+                const queryType = (type === 'จ้างบุคลากร' || type === 'จ้าง') ? ['จ้าง', 'จ้างบุคลากร'] : ['ซื้อ'];
+
                 const { data } = await supabaseClient.from('supply_procurements')
                     .select('po_number')
-                    .eq('procurement_type', type)
+                    .in('procurement_type', queryType)
                     .eq('academic_year', year)
-                    .order('id', { ascending: false }) // เรียงจากล่าสุดลงไปเก่าสุด
-                    .limit(1); // ดึงมาแค่ใบเดียว (ใบล่าสุด)
+                    .order('id', { ascending: false })
+                    .limit(1);
                 
-                let nextNum = 1; // ถ้ายังไม่มีเลยให้เริ่มที่ 1
+                let nextNum = 1; 
                 
                 if (data && data.length > 0 && data[0].po_number) {
-                    // สมมติใบล่าสุดเลข '015/2567' เราจะแยกเอาแค่ '015' มาแปลงเป็นตัวเลข แล้ว +1
                     const lastNumStr = data[0].po_number.split('/')[0];
                     nextNum = (parseInt(lastNumStr, 10) || 0) + 1;
                 }
                 
-                // แปลงกลับเป็นฟอร์แมต 3 หลัก เช่น 016/2567
                 document.getElementById('p_po_num').value = String(nextNum).padStart(3, '0') + '/' + year;
             }
         }
 
-        window.updateProcItem = (itemId, field, value) => {
-            const it = procCurrentItems.find(i => i.id === itemId);
-            if(it) {
-                it[field] = value;
-                const total = (parseFloat(it.qty)||0) * (parseFloat(it.price)||0);
-                document.getElementById(`pi_tot_${itemId}`).innerText = formatMoney(total);
-                
-                // 🌟 อัปเดตยอดเงินรวมทั้งหมดในฟอร์มแบบ Real-time
-                const newGrandTotal = procCurrentItems.reduce((sum, item) => sum + ((parseFloat(item.qty)||0) * (parseFloat(item.price)||0)), 0);
-                if (document.getElementById('p_budget')) document.getElementById('p_budget').value = newGrandTotal;
-                if (document.getElementById('p_q_price')) document.getElementById('p_q_price').value = newGrandTotal;
-            }
-        }
-
-        window.renderProcItems = () => {
-            let html = '';
-            procCurrentItems.forEach(it => {
-                const total = (parseFloat(it.qty)||0) * (parseFloat(it.price)||0);
-                html += `
-                    <tr class="border-b border-slate-100">
-                        <td class="p-1"><input type="text" value="${it.name||''}" oninput="window.updateProcItem(${it.id}, 'name', this.value)" class="w-full border border-slate-200 rounded p-1.5 text-xs outline-none"></td>
-                        <td class="p-1"><input type="number" value="${it.price||''}" oninput="window.updateProcItem(${it.id}, 'price', this.value)" class="w-full border border-slate-200 rounded p-1.5 text-xs text-right outline-none"></td>
-                        <td class="p-1"><input type="number" value="${it.qty||''}" oninput="window.updateProcItem(${it.id}, 'qty', this.value)" class="w-full border border-slate-200 rounded p-1.5 text-xs text-center outline-none"></td>
-                        <td class="p-2 text-right text-xs font-bold text-slate-700" id="pi_tot_${it.id}">${formatMoney(total)}</td>
-                    </tr>
-                `;
-            });
-            document.getElementById('proc_items_tbody').innerHTML = html;
-        }
-
-        window.closeProcModal = () => { document.getElementById('proc-modal').classList.add('hidden'); }
-
-        // 🌟 เพิ่มฟังก์ชันให้แอดมินลบ/เพิ่มแถววัสดุเองได้
         window.addProcItem = () => {
             procCurrentItems.push({ id: Date.now(), name: '', price: 0, qty: 1, note: '' });
             window.renderProcItems();
@@ -2118,10 +2047,12 @@
         window.removeProcItem = (itemId) => {
             procCurrentItems = procCurrentItems.filter(i => i.id !== itemId);
             window.renderProcItems();
-            // อัปเดตยอดรวมให้ทันที
+            
             const newTotalAmount = procCurrentItems.reduce((sum, item) => sum + ((parseFloat(item.qty)||0) * (parseFloat(item.price)||0)), 0);
             if (document.getElementById('p_budget')) document.getElementById('p_budget').value = newTotalAmount;
             if (document.getElementById('p_q_price')) document.getElementById('p_q_price').value = newTotalAmount;
+            if (document.getElementById('p_emp_q_price')) document.getElementById('p_emp_q_price').value = newTotalAmount;
+            // ลบการอัปเดต p_emp_contract_amt ออกแล้ว
         };
 
         window.updateProcItem = (itemId, field, value) => {
@@ -2134,6 +2065,8 @@
                 const newGrandTotal = procCurrentItems.reduce((sum, item) => sum + ((parseFloat(item.qty)||0) * (parseFloat(item.price)||0)), 0);
                 if (document.getElementById('p_budget')) document.getElementById('p_budget').value = newGrandTotal;
                 if (document.getElementById('p_q_price')) document.getElementById('p_q_price').value = newGrandTotal;
+                if (document.getElementById('p_emp_q_price')) document.getElementById('p_emp_q_price').value = newGrandTotal;
+                // ลบการอัปเดต p_emp_contract_amt ออกแล้ว
             }
         }
 
@@ -2163,11 +2096,14 @@
         window.saveProcurement = async () => {
             const id = document.getElementById('p_id').value;
             const newTotalAmount = procCurrentItems.reduce((sum, item) => sum + ((parseFloat(item.qty)||0) * (parseFloat(item.price)||0)), 0);
+            
+            const pType = document.getElementById('p_type').value;
+            const isPersonnel = (pType === 'จ้างบุคลากร');
 
             const payload = {
-                expense_request_id: procCurrentExpenseId || null, // 🌟 ยอมให้เป็น null ได้ถ้าแอดมินคีย์เอง
+                expense_request_id: procCurrentExpenseId || null,
                 academic_year: document.getElementById('p_year').value,
-                procurement_type: document.getElementById('p_type').value,
+                procurement_type: pType,
                 report_date: document.getElementById('p_report_date').value || null,
                 subject_name: document.getElementById('p_subject').value,
                 reason: document.getElementById('p_reason').value,
@@ -2179,26 +2115,38 @@
                 comm_2: document.getElementById('p_c2').value,
                 comm_3: document.getElementById('p_c3').value,
                 order_date: document.getElementById('p_order_date').value || null,
-                quotation_date: document.getElementById('p_q_date').value || null,
-                vendor_id: document.getElementById('p_v_id').value || null,
-                quotation_price: document.getElementById('p_q_price').value || null,
-                quotation_age: document.getElementById('p_q_age').value || null,
-                delivery_duration: document.getElementById('p_v_del_dur').value || null,
-                winner_date: document.getElementById('p_win_date').value || null,
-                approval_date: document.getElementById('p_app_date').value || null,
                 po_number: document.getElementById('p_po_num').value,
                 po_date: document.getElementById('p_po_date').value || null,
-                due_date: document.getElementById('p_due_date').value || null,
-                delivery_date: document.getElementById('p_del_date').value || null,
-                late_days: document.getElementById('p_late_days').value || null,
-                inspection_date: document.getElementById('p_insp_date').value || null,
-                report_note_date: document.getElementById('p_note_date').value || null,
-                auto_requisition: document.getElementById('p_req_auto').value,
-                requester_name: document.getElementById('p_req_name').value,
-                requisition_date: document.getElementById('p_req_date').value || null,
-                requisition_reason: document.getElementById('p_req_reason').value,
                 items: procCurrentItems,
-                file_url: document.getElementById('p_file_url').value || null
+                file_url: document.getElementById('p_file_url').value || null,
+                
+                vendor_id: isPersonnel ? document.getElementById('p_emp_v_id').value : document.getElementById('p_v_id').value || null,
+                quotation_date: isPersonnel ? document.getElementById('p_emp_q_date').value : document.getElementById('p_q_date').value || null,
+                quotation_price: isPersonnel ? document.getElementById('p_emp_q_price').value : document.getElementById('p_q_price').value || null,
+                delivery_duration: isPersonnel ? document.getElementById('p_emp_del_dur').value : document.getElementById('p_v_del_dur').value || null,
+                due_date: isPersonnel ? document.getElementById('p_emp_due_date').value : document.getElementById('p_due_date').value || null,
+                inspection_date: isPersonnel ? document.getElementById('p_emp_insp_date').value : document.getElementById('p_insp_date').value || null,
+                
+                emp_position: isPersonnel ? document.getElementById('p_emp_position').value : null,
+                contract_no: isPersonnel ? document.getElementById('p_emp_contract_no').value : null,
+                order_no: isPersonnel ? document.getElementById('p_emp_order_no').value : null,
+                contract_start: isPersonnel ? document.getElementById('p_emp_contract_start').value : null,
+                contract_end: isPersonnel ? document.getElementById('p_emp_contract_end').value : null,
+                contract_limit: isPersonnel ? parseFloat(document.getElementById('p_emp_contract_amt').value) : null,
+                work_month: isPersonnel ? document.getElementById('p_emp_work_month').value : null,
+                work_start: isPersonnel ? document.getElementById('p_emp_work_start').value : null,
+                work_end: isPersonnel ? document.getElementById('p_emp_work_end').value : null,
+                
+                quotation_age: !isPersonnel ? document.getElementById('p_q_age').value : null,
+                winner_date: !isPersonnel ? document.getElementById('p_win_date').value : null,
+                approval_date: !isPersonnel ? document.getElementById('p_app_date').value : null,
+                delivery_date: !isPersonnel ? document.getElementById('p_del_date').value : null,
+                late_days: !isPersonnel ? document.getElementById('p_late_days').value : null,
+                report_note_date: !isPersonnel ? document.getElementById('p_note_date').value : null,
+                auto_requisition: !isPersonnel && document.getElementById('p_req_auto') ? document.getElementById('p_req_auto').value : null,
+                requester_name: !isPersonnel && document.getElementById('p_req_name') ? document.getElementById('p_req_name').value : null,
+                requisition_date: !isPersonnel && document.getElementById('p_req_date') ? document.getElementById('p_req_date').value : null,
+                requisition_reason: !isPersonnel && document.getElementById('p_req_reason') ? document.getElementById('p_req_reason').value : null,
             };
 
             if(!payload.subject_name || !payload.vendor_id) {
@@ -2208,19 +2156,17 @@
             showLoader();
             try {
                 if(id) {
-                    // กรณีอัปเดตข้อมูลเดิม (ไม่เด้งพัสดุซ้ำ)
                     await supabaseClient.from('supply_procurements').update(payload).eq('id', id);
                 } else {
-                    // กรณีบันทึกข้อมูลใหม่
                     await supabaseClient.from('supply_procurements').insert([payload]);
                     
-                    // 🌟 ยิงข้อมูลพัสดุเข้าตาราง supply_items อัตโนมัติ
-                    if (procCurrentItems && procCurrentItems.length > 0) {
+                    // 🌟 เพิ่มเงื่อนไข pType === 'ซื้อ' เข้าไปตรงนี้ครับ
+                    // ถ้าระบุเป็น "จ้าง" หรือ "จ้างบุคลากร" มันจะไม่เข้าไปยุ่งกับตารางพัสดุเลย
+                    if (pType === 'ซื้อ' && procCurrentItems && procCurrentItems.length > 0) {
                         const itemsToInsert = procCurrentItems.map((item, index) => ({
                             item_group: 'รอระบุกลุ่ม',
                             category_name: 'รอระบุประเภท',
                             depreciation: 'ไม่คำนวณค่าเสื่อมสภาพ',
-                            // สร้างรหัสชั่วคราว ป้องกันรหัสซ้ำกันในระบบ
                             item_code: 'TEMP-' + Date.now().toString().slice(-5) + '-' + index,
                             item_name: item.name || 'ไม่มีชื่อรายการ',
                             price: parseFloat(item.price) || 0,
@@ -2231,7 +2177,6 @@
                     }
                 }
                 
-                // 🌟 อัปเดตกลับใบขอเบิก เฉพาะกรณีที่ดึงมาจากใบขอเบิกของระบบแผนเท่านั้น!
                 if (procCurrentExpenseId) {
                     await supabaseClient.from('expense_requests').update({
                         items: procCurrentItems,
@@ -2240,7 +2185,7 @@
                 }
                 
                 hideLoader();
-                Swal.fire({ icon: 'success', title: 'บันทึกสำเร็จ', text: 'เพิ่มข้อมูลจัดซื้อและส่งรายการเข้าทะเบียนพัสดุเรียบร้อยแล้ว', showConfirmButton: false, timer: 2000 });
+                Swal.fire({ icon: 'success', title: 'บันทึกสำเร็จ', text: 'บันทึกข้อมูลจัดซื้อ/จ้างเรียบร้อยแล้ว', showConfirmButton: false, timer: 2000 });
                 window.closeProcModal();
                 window.navigate('procurement');
             } catch(e) {
@@ -3315,7 +3260,7 @@
             const { data: procData } = await supabaseClient.from('supply_procurements').select('*').eq('id', procId).single();
             const p = procData;
 
-            // 🌟 เพิ่มการดึงข้อมูลตาราง app_users เพื่อเอาตำแหน่งมาใช้
+            // 🌟 ดึงข้อมูลตาราง app_users เพื่อเอาตำแหน่งมาใช้
             const [tplRes, schoolRes, vRes, userRes] = await Promise.all([
                 supabaseClient.from('templates').select('*').order('id', {ascending: false}),
                 supabaseClient.from('school_info').select('*').limit(1).single(),
@@ -3327,7 +3272,6 @@
             const tpls = tplRes.data || [];
             const users = userRes.data || [];
             
-            // 🌟 ฟังก์ชันช่วยค้นหาตำแหน่งจากชื่อ
             const getPosition = (name) => {
                 if (!name) return '.........................';
                 const u = users.find(u => u.name.trim() === name.trim());
@@ -3336,22 +3280,28 @@
             
             const rawAmt = p.budget_amount || 0;
             const amt = parseFloat(String(rawAmt).replace(/,/g, '')) || 0;
-            const keyword1 = p.procurement_type === 'ซื้อ' ? 'ซื้อ' : 'จ้าง';
             const isOver5000 = amt > 5000;
             
-            const matchedTpl = tpls.find(t => {
-                const tName = String(t.name).replace(/\s+/g, '');
-                const hasType = tName.includes(keyword1);
-                if (!hasType) return false;
-                
-                if (isOver5000) {
-                    return tName.includes('เกิน') && !tName.includes('ไม่เกิน');
-                } else {
-                    return tName.includes('ไม่เกิน');
-                }
-            });
-
-            if (!matchedTpl) return Swal.fire({ icon: 'error', title: 'ไม่พบแบบฟอร์ม', text: `ระบบต้องการแบบฟอร์มที่มีคำว่า "${keyword1}" และ "เกิน/ไม่เกิน" ในชื่อไฟล์ (เมนู Template)` });
+            // 🌟 1. เลือกระบบการดึงฟอร์ม (แยกจ้างบุคลากร ออกจาก ซื้อ/จ้าง ปกติ)
+            let matchedTpl;
+            if (p.procurement_type === 'จ้างบุคลากร') {
+                matchedTpl = tpls.find(t => String(t.name).replace(/\s+/g, '').includes('จ้างบุคลากร'));
+                if (!matchedTpl) return Swal.fire({ icon: 'error', title: 'ไม่พบแบบฟอร์ม', text: 'ระบบต้องการแบบฟอร์มที่มีชื่อ "จ้างบุคลากร" ในชื่อไฟล์ (เมนู Template)' });
+            } else {
+                const keyword1 = p.procurement_type === 'ซื้อ' ? 'ซื้อ' : 'จ้าง';
+                matchedTpl = tpls.find(t => {
+                    const tName = String(t.name).replace(/\s+/g, '');
+                    const hasType = tName.includes(keyword1);
+                    if (!hasType) return false;
+                    
+                    if (isOver5000) {
+                        return tName.includes('เกิน') && !tName.includes('ไม่เกิน');
+                    } else {
+                        return tName.includes('ไม่เกิน');
+                    }
+                });
+                if (!matchedTpl) return Swal.fire({ icon: 'error', title: 'ไม่พบแบบฟอร์ม', text: `ระบบต้องการแบบฟอร์มที่มีคำว่า "${keyword1}" และ "เกิน/ไม่เกิน" ในชื่อไฟล์ (เมนู Template)` });
+            }
 
             const { value: formValues } = await Swal.fire({
                 title: 'พิมพ์เอกสารจัดซื้อ/จัดจ้าง',
@@ -3410,6 +3360,7 @@
                 let parsedItems = [];
                 try { parsedItems = typeof p.items === 'string' ? JSON.parse(p.items) : (p.items || []); } catch(e) { parsedItems = []; }
 
+                // เตรียมข้อมูลลูปตารางปกติ
                 const itemsForWord = parsedItems.map((it, idx) => ({
                     "ที่": idx + 1, 
                     "รายการ": it.name || '', 
@@ -3418,15 +3369,19 @@
                     "ราคารวมรายการ": formatMoney(Number(it.qty)*Number(it.price)), "ราคารวมรายการ ": formatMoney(Number(it.qty)*Number(it.price))
                 }));
 
+                // สำหรับจ้างบุคลากรที่มักมีแค่ 1 รายการ และอาจไม่ใช้ Tag วนลูป <<#items>> ในตาราง
+                const firstItem = parsedItems[0] || {};
+                const firstItemQty = parseFloat(firstItem.qty) || 0;
+                const firstItemPrice = parseFloat(firstItem.price) || 0;
+
                 const subjBuy = p.procurement_type === 'ซื้อ' ? (p.subject_name||'') : '';
-                const subjHire = p.procurement_type === 'จ้าง' ? (p.subject_name||'') : '';
+                const subjHire = (p.procurement_type === 'จ้าง' || p.procurement_type === 'จ้างบุคลากร') ? (p.subject_name||'') : '';
 
                 const dataToFill = {
                     "วันที่ตรวจรับ": formatD(p.inspection_date), 
                     "ขอซื้อ": subjBuy, "ขอซื้อ ": subjBuy, 
                     "ขอจ้าง": subjHire, "ขอจ้าง ": subjHire,
                     "จำนวน": parsedItems.length, 
-                    "ชื่อร้าน": v ? v.vendor_name : '', "ผู้ขาย": v ? v.vendor_name : '', "ผู้รับจ้าง": v ? v.vendor_name : '',
                     "ราคา": formatMoney(amt), 
                     "ยอดเงินรวมตัวอักษร": ThaiBaht(amt), 
                     "เลขที่ใบสั่งซื้อ": p.po_number || '', "เลขที่ใบสั่งจ้าง": p.po_number || '',
@@ -3443,10 +3398,9 @@
                     "กลุ่ม/งาน": p.department_name || '', 
                     "ชื่อโครงการ": p.project_name || '', 
                     "เพื่อ": p.reason || '', 
-                    "จำนวนวัน": p.delivery_days || '....', "จำนวนวันส่ง": p.delivery_duration || '....',
+                    "จำนวนวัน": p.delivery_days || p.delivery_duration || '....', "จำนวนวันส่ง": p.delivery_duration || p.delivery_days || '....',
                     "ชื่อประธานกรรมการ": p.comm_1 || '', "ชื่อกรรมการ1": p.comm_2 || '', "ชื่อกรรมการ2": p.comm_3 || '',
                     
-                    // 🌟 เพิ่มตัวแปรสำหรับดึงตำแหน่ง
                     "ตำแหน่งประธาน": "ประธานกรรมการ", 
                     "ตำแหน่งกรรมการ1": "กรรมการ", 
                     "ตำแหน่งกรรมการ2": "กรรมการ",
@@ -3459,12 +3413,31 @@
                     "เลขเสียภาษี": v ? v.tax_id : '', "เลขเสียภาษี ": v ? v.tax_id : '', 
                     "วันที่ขอ": formatD(p.report_date), "เลขที่ตรวจรับ": formValues.inspectNo,
                     "ผู้เบิก": p.requester_name || '', "ชื่อผู้เบิก": p.requester_name || '', 
-                    
-                    // 🌟 เพิ่มตัวแปรดึงตำแหน่งผู้เบิกพัสดุ
                     "ตำแหน่งผู้เบิก": getPosition(p.requester_name), 
                     
                     "เล่มที่": "......", "เลขที่": "......",
-                    "items": itemsForWord
+                    "items": itemsForWord,
+
+                    // 🌟 2. ตัวแปรใหม่เฉพาะของ "จ้างบุคลากร" 
+                    "ชื่อผู้รับจ้าง": v ? v.vendor_name : (p.vendor_name || ''),
+                    "ที่อยู่": v ? v.address : '',
+                    "เบอร์": v ? v.phone : '',
+                    "ตำแหน่ง": p.emp_position || '',
+                    "สัญญาจ้างที่": p.contract_no || '',
+                    "คำสั่งจ้าง": p.order_no || '',
+                    "ตั้งแต่วันที่": formatD(p.contract_start),
+                    "ถึงวันที่": formatD(p.contract_end),
+                    "วงเงิน": formatMoney(p.contract_limit || 0),
+                    "วงเงินรวมตัวอักษร": ThaiBaht(p.contract_limit || 0),
+                    "ประจำเดือน": p.work_month || '',
+                    "วันแรกของเดือน": formatD(p.work_start),
+                    "วันสุดท้ายของเดือน": formatD(p.work_end),
+                    
+                    // 🌟 ซัพพอร์ตกรณีที่ Template จ้างบุคลากร ไม่ได้ใช้ Tag วนลูป <<#items>>
+                    "ที่": 1,
+                    "รายการ": firstItem.name || '',
+                    "ราคาต่อหน่วย": formatMoney(firstItemPrice),
+                    "จำนวนเงิน": formatMoney(firstItemQty * firstItemPrice)
                 };
 
                 const response = await fetch(matchedTpl.file_url);

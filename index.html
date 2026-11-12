@@ -3843,7 +3843,7 @@
 
             showLoader();
 
-            // 🌟 1. จัดการอัปโหลดไฟล์แนบ
+            // 1. จัดการอัปโหลดไฟล์แนบ
             let fileUrl = null;
             const fileInput = document.getElementById('exp_file');
             if (fileInput && fileInput.files.length > 0) {
@@ -3859,7 +3859,6 @@
                 fileUrl = supabaseClient.storage.from('pr_plan_storage').getPublicUrl(`expenses/${safeFileName}`).data.publicUrl;
             }
             
-            // 2. เตรียมข้อมูล Payload
             const payload = {
                 project_id: expCurrentProjId, 
                 activity_id: expCurrentActId,
@@ -3886,7 +3885,6 @@
                 items: expItemsList
             };
 
-            // หากมีการแนบไฟล์มาใหม่ ให้ใส่ URL ลงใน payload
             if (fileUrl) payload.file_url = fileUrl;
 
             let errObj = null;
@@ -3899,22 +3897,27 @@
                 let allocConfig = schoolConf?.allocations_config || {};
                 let docRun = allocConfig.doc_run || { current_num: 1, year_text: '70' };
                 
-                // 🌟 ปรับปรุงการรันเลข: ไปดึงเลขจากใบล่าสุดในฐานข้อมูลมาเช็ค
+                // 🌟 1. ดึงเลขใบล่าสุดจากฐานข้อมูล (กรองเฉพาะของปีนั้นๆ)
                 const { data: latestReq } = await supabaseClient.from('expense_requests')
                     .select('request_code')
+                    .ilike('request_code', '%/' + docRun.year_text)
                     .order('id', { ascending: false })
                     .limit(1);
 
-                let nextNum = Number(docRun.current_num); // ค่าเริ่มต้นถ้าไม่มีข้อมูลในฐานข้อมูล
+                let nextNum = 1;
 
                 if (latestReq && latestReq.length > 0 && latestReq[0].request_code) {
-                    // แยกรหัสด้านหน้าเครื่องหมาย / ออกมา (เช่น "2/70" จะได้ "2")
                     const lastNumStr = latestReq[0].request_code.split('/')[0];
                     const lastNum = parseInt(lastNumStr, 10);
                     if (!isNaN(lastNum)) {
-                        // ป้องกันกรณีเลขที่ตั้งไว้ในตั้งค่า น้อยกว่าเลขในระบบจริง
-                        nextNum = Math.max(nextNum, lastNum + 1);
+                        nextNum = lastNum + 1; // รันต่อจากใบล่าสุดในระบบ
                     }
+                }
+                
+                // 🌟 2. เทียบกับเลขตั้งต้นที่ตั้งค่าไว้ (เอาเลขที่มากกว่าเสมอ)
+                const configStartNum = Number(docRun.current_num) || 1;
+                if (configStartNum > nextNum) {
+                     nextNum = configStartNum;
                 }
 
                 payload.request_code = nextNum + '/' + docRun.year_text;
@@ -3922,11 +3925,7 @@
                 const { error } = await supabaseClient.from('expense_requests').insert([payload]);
                 errObj = error;
 
-                if (!error && schoolConf) {
-                    docRun.current_num = nextNum + 1;
-                    allocConfig.doc_run = docRun;
-                    await supabaseClient.from('school_info').update({ allocations_config: allocConfig }).eq('id', schoolConf.id);
-                }
+                // 🌟 ปิดระบบยิงเลขกลับไปเซฟที่หน้า Template เพื่อให้ระบบยึดเลขจากใบเสร็จที่มีอยู่จริงเป็นหลัก
             }
 
            // 3. ระบบส่งแจ้งเตือน Telegram
@@ -5436,50 +5435,62 @@
 
         window.printProcurementAuto = async (reqId) => {
             showLoader();
-            const { data: procData } = await supabaseClient.from('supply_procurements').select('*').eq('expense_request_id', reqId).single();
-            if (!procData) {
-                hideLoader();
-                return Swal.fire({ icon: 'warning', title: 'ยังไม่พร้อมพิมพ์', text: 'แอดมินพัสดุยังไม่ได้จัดทำเอกสารจัดซื้อ/จ้างสำหรับรายการนี้ครับ' });
-            }
-            const p = procData;
+            // 1. ดึงข้อมูลใบเบิก
+            const { data: req } = await supabaseClient.from('expense_requests').select('*').eq('id', reqId).single();
+            if (!req) { hideLoader(); return Swal.fire({icon: 'error', title:'ไม่พบข้อมูลใบเบิก'}); }
 
-            // 🌟 เพิ่มการดึงข้อมูลตาราง app_users เพื่อเอาตำแหน่งมาใช้
-            const [tplRes, schoolRes, vRes, userRes] = await Promise.all([
+            // 2. ดึงข้อมูลจัดจ้าง (ถ้าแอดมินพัสดุทำรายการไว้แล้ว) เพื่อเช็คว่าเป็น จ้างบุคลากร หรือไม่
+            const { data: proc } = await supabaseClient.from('supply_procurements').select('*').eq('expense_request_id', reqId).single();
+            
+            const amt = parseFloat(req.total_amount) || 0;
+            const isOver5000 = amt > 5000;
+            
+            // 🌟 เช็คประเภท: ถ้าระบบพัสดุทำรายการแล้ว ให้ยึดประเภทจากพัสดุ (เช่น จ้างบุคลากร) แต่ถ้ายัง ให้ยึดจากใบเบิก
+            let procType = proc ? proc.procurement_type : (req.expense_type === 'ซื้อวัสดุ' ? 'ซื้อ' : 'จ้าง');
+            const vendorId = proc ? proc.vendor_id : 0;
+            
+            // 3. ดึง Template, ข้อมูลโรงเรียน, ร้านค้า และบุคลากร
+            const [tplRes, schoolRes, vRes, userRes, projRes] = await Promise.all([
                 supabaseClient.from('templates').select('*').order('id', {ascending: false}),
                 supabaseClient.from('school_info').select('*').limit(1).single(),
-                supabaseClient.from('supply_vendors').select('*').eq('id', p.vendor_id || 0).single(),
-                supabaseClient.from('app_users').select('name, position')
+                supabaseClient.from('supply_vendors').select('*').eq('id', vendorId || 0).single(),
+                supabaseClient.from('app_users').select('name, position'),
+                supabaseClient.from('projects').select('activities, app_users(name)').eq('id', req.project_id).single()
             ]);
             hideLoader();
 
             const tpls = tplRes.data || [];
             const users = userRes.data || [];
+            const school = schoolRes.data || {};
+            const v = vRes.data || null;
+            const p = proc || {}; // ถ้ายังไม่มีประวัติในพัสดุ จะเป็น object ว่างๆ
             
-            // 🌟 ฟังก์ชันช่วยค้นหาตำแหน่งจากชื่อ
             const getPosition = (name) => {
                 if (!name) return '.........................';
                 const u = users.find(u => u.name.trim() === name.trim());
                 return u && u.position ? u.position : '.........................';
             };
-            
-            const keyword1 = p.procurement_type === 'ซื้อ' ? 'ซื้อ' : 'จ้าง';
-            const rawAmt = p.budget_amount || 0;
-            const amt = parseFloat(String(rawAmt).replace(/,/g, '')) || 0;
-            const isOver5000 = amt > 5000;
-            
-            const matchedTpl = tpls.find(t => {
-                const tName = String(t.name).replace(/\s+/g, '');
-                const hasType = tName.includes(keyword1);
-                if (!hasType) return false;
-                
-                if (isOver5000) {
-                    return tName.includes('เกิน') && !tName.includes('ไม่เกิน');
-                } else {
-                    return tName.includes('ไม่เกิน');
-                }
-            });
 
-            if (!matchedTpl) return Swal.fire({ icon: 'error', title: 'ไม่พบแบบฟอร์ม', text: `ระบบต้องการแบบฟอร์มที่มีคำว่า "${keyword1}" และ "เกิน/ไม่เกิน" ในชื่อไฟล์ (เมนู Template)` });
+            // 🌟 เลือกระบบฟอร์มอัตโนมัติ (เช็คจ้างบุคลากร ก่อน)
+            let matchedTpl;
+            if (procType === 'จ้างบุคลากร') {
+                matchedTpl = tpls.find(t => String(t.name).replace(/\s+/g, '').includes('จ้างบุคลากร'));
+                if (!matchedTpl) return Swal.fire({ icon: 'error', title: 'ไม่พบแบบฟอร์ม', text: 'ระบบต้องการแบบฟอร์มที่มีชื่อ "จ้างบุคลากร" ในชื่อไฟล์ (เมนู Template)' });
+            } else {
+                const keyword1 = procType === 'ซื้อ' ? 'ซื้อ' : 'จ้าง';
+                matchedTpl = tpls.find(t => {
+                    const tName = String(t.name).replace(/\s+/g, '');
+                    const hasType = tName.includes(keyword1);
+                    if (!hasType) return false;
+                    
+                    if (isOver5000) {
+                        return tName.includes('เกิน') && !tName.includes('ไม่เกิน');
+                    } else {
+                        return tName.includes('ไม่เกิน');
+                    }
+                });
+                if (!matchedTpl) return Swal.fire({ icon: 'error', title: 'ไม่พบแบบฟอร์ม', text: `ระบบต้องการแบบฟอร์มที่มีคำว่า "${keyword1}" และ "เกิน/ไม่เกิน" ในชื่อไฟล์ (เมนู Template)` });
+            }
 
             const { value: formValues } = await Swal.fire({
                 title: 'พิมพ์เอกสารจัดซื้อ/จัดจ้าง',
@@ -5490,11 +5501,11 @@
                         </div>
                         <div>
                             <label class="block text-sm font-bold text-slate-700 mb-1">เลขที่ใบส่งของ / ใบแจ้งหนี้ (ถ้ามี)</label>
-                            <input id="swal_receipt" class="w-full border border-slate-300 rounded-lg p-2.5 outline-none focus:border-indigo-500" placeholder="เว้นว่างไว้เพื่อเขียนด้วยมือทีหลังได้">
+                            <input id="swal_receipt" class="w-full border border-slate-300 rounded-lg p-2.5 outline-none focus:border-indigo-500" placeholder="เว้นว่างไว้เพื่อเขียนทีหลังได้">
                         </div>
                         <div>
                             <label class="block text-sm font-bold text-slate-700 mb-1">เลขที่ใบตรวจรับ (ถ้ามี)</label>
-                            <input id="swal_inspect_no" class="w-full border border-slate-300 rounded-lg p-2.5 outline-none focus:border-indigo-500" placeholder="เว้นว่างไว้เพื่อเขียนด้วยมือทีหลังได้">
+                            <input id="swal_inspect_no" class="w-full border border-slate-300 rounded-lg p-2.5 outline-none focus:border-indigo-500" placeholder="เว้นว่างไว้เพื่อเขียนทีหลังได้">
                         </div>
                     </div>
                 `,
@@ -5504,10 +5515,8 @@
 
             if (!formValues) return;
             showLoader();
+
             try {
-                const school = schoolRes.data || {};
-                const v = vRes.data || null;
-                
                 const vendorType = v ? v.vendor_type : 'บุคคลธรรมดา';
                 let preVat = amt;
                 let vat = 0;
@@ -5535,9 +5544,35 @@
                     return `${d.getDate()} ${ms[d.getMonth()]} ${d.getFullYear()+543}`;
                 };
 
-                let parsedItems = [];
-                try { parsedItems = typeof p.items === 'string' ? JSON.parse(p.items) : (p.items || []); } catch(e) { parsedItems = []; }
+                const ThaiBaht = (amountStr) => {
+                    const num = parseFloat(amountStr || 0).toFixed(2);
+                    if (num === '0.00') return 'ศูนย์บาทถ้วน';
+                    const parts = num.split('.');
+                    let baht = parts[0], satang = parts[1];
+                    const text = ['ศูนย์', 'หนึ่ง', 'สอง', 'สาม', 'สี่', 'ห้า', 'หก', 'เจ็ด', 'แปด', 'เก้า'];
+                    const unit = ['', 'สิบ', 'ร้อย', 'พัน', 'หมื่น', 'แสน', 'ล้าน'];
+                    const convert = (n) => {
+                        let res = '';
+                        for (let i = 0; i < n.length; i++) {
+                            const digit = parseInt(n[i]);
+                            if (digit !== 0) {
+                                if (i === n.length - 1 && digit === 1 && n.length > 1 && n[i-1] != '0') res += 'เอ็ด';
+                                else if (i === n.length - 2 && digit === 2) res += 'ยี่';
+                                else if (i === n.length - 2 && digit === 1) res += '';
+                                else res += text[digit];
+                                res += unit[n.length - 1 - i];
+                            }
+                        }
+                        return res;
+                    };
+                    let result = convert(baht) + 'บาท';
+                    if (satang === '00') result += 'ถ้วน';
+                    else result += convert(satang) + 'สตางค์';
+                    return result;
+                };
 
+                let parsedItems = req.items || [];
+                
                 const itemsForWord = parsedItems.map((it, idx) => ({
                     "ที่": idx + 1, 
                     "รายการ": it.name || '', 
@@ -5546,15 +5581,18 @@
                     "ราคารวมรายการ": formatMoney(Number(it.qty)*Number(it.price)), "ราคารวมรายการ ": formatMoney(Number(it.qty)*Number(it.price))
                 }));
 
-                const subjBuy = p.procurement_type === 'ซื้อ' ? (p.subject_name||'') : '';
-                const subjHire = p.procurement_type === 'จ้าง' ? (p.subject_name||'') : '';
+                const firstItem = parsedItems[0] || {};
+                const firstItemQty = parseFloat(firstItem.qty) || 0;
+                const firstItemPrice = parseFloat(firstItem.price) || 0;
+
+                const subjBuy = procType === 'ซื้อ' ? (p.subject_name || req.activity_name || '') : '';
+                const subjHire = (procType === 'จ้าง' || procType === 'จ้างบุคลากร') ? (p.subject_name || req.activity_name || '') : '';
 
                 const dataToFill = {
                     "วันที่ตรวจรับ": formatD(p.inspection_date), 
                     "ขอซื้อ": subjBuy, "ขอซื้อ ": subjBuy, 
                     "ขอจ้าง": subjHire, "ขอจ้าง ": subjHire,
                     "จำนวน": parsedItems.length, 
-                    "ชื่อร้าน": v ? v.vendor_name : '', "ผู้ขาย": v ? v.vendor_name : '', "ผู้รับจ้าง": v ? v.vendor_name : '',
                     "ราคา": formatMoney(amt), 
                     "ยอดเงินรวมตัวอักษร": ThaiBaht(amt), 
                     "เลขที่ใบสั่งซื้อ": p.po_number || '', "เลขที่ใบสั่งจ้าง": p.po_number || '',
@@ -5568,31 +5606,50 @@
                     "หักภาษี 1%": formatMoney(tax1), "หักภาษี1%": formatMoney(tax1), 
                     "ค่าปรับ": formatMoney(fine), 
                     "รวมจ่ายจริง": formatMoney(netPay), "รวมจ่ายจริง ": formatMoney(netPay),
-                    "กลุ่ม/งาน": p.department_name || '', 
-                    "ชื่อโครงการ": p.project_name || '', 
-                    "เพื่อ": p.reason || '', 
-                    "จำนวนวัน": p.delivery_days || '....', "จำนวนวันส่ง": p.delivery_duration || '....',
-                    "ชื่อประธานกรรมการ": p.comm_1 || '', "ชื่อกรรมการ1": p.comm_2 || '', "ชื่อกรรมการ2": p.comm_3 || '',
+                    "กลุ่ม/งาน": p.department_name || req.department_id || '', 
+                    "ชื่อโครงการ": p.project_name || req.project_name || '', 
+                    "เพื่อ": p.reason || req.doc_subject || '', 
+                    "จำนวนวัน": p.delivery_days || p.delivery_duration || '....', "จำนวนวันส่ง": p.delivery_duration || p.delivery_days || '....',
+                    "ชื่อประธานกรรมการ": p.comm_1 || req.comm_president || '', 
+                    "ชื่อกรรมการ1": p.comm_2 || req.comm_1 || '', 
+                    "ชื่อกรรมการ2": p.comm_3 || req.comm_2 || '',
                     
-                    // 🌟 เพิ่มตัวแปรสำหรับดึงตำแหน่ง
                     "ตำแหน่งประธาน": "ประธานกรรมการ", 
                     "ตำแหน่งกรรมการ1": "กรรมการ", 
                     "ตำแหน่งกรรมการ2": "กรรมการ",
-                    "ตำแหน่งงานประธาน": getPosition(p.comm_1),
-                    "ตำแหน่งงานกรรมการ1": getPosition(p.comm_2),
-                    "ตำแหน่งงานกรรมการ2": getPosition(p.comm_3),
+                    "ตำแหน่งงานประธาน": getPosition(p.comm_1 || req.comm_president),
+                    "ตำแหน่งงานกรรมการ1": getPosition(p.comm_2 || req.comm_1),
+                    "ตำแหน่งงานกรรมการ2": getPosition(p.comm_3 || req.comm_2),
                     
                     "ชื่อเจ้าหน้าที่": school.procurement_officer || '', 
                     "ที่อยู่ร้าน": v ? v.address : '', "เบอร์ร้าน": v ? v.phone : '', "เบอร์ร้าน ": v ? v.phone : '',
                     "เลขเสียภาษี": v ? v.tax_id : '', "เลขเสียภาษี ": v ? v.tax_id : '', 
-                    "วันที่ขอ": formatD(p.report_date), "เลขที่ตรวจรับ": formValues.inspectNo,
-                    "ผู้เบิก": p.requester_name || '', "ชื่อผู้เบิก": p.requester_name || '', 
-                    
-                    // 🌟 เพิ่มตัวแปรดึงตำแหน่งผู้เบิกพัสดุ
-                    "ตำแหน่งผู้เบิก": getPosition(p.requester_name), 
+                    "วันที่ขอ": formatD(p.report_date || req.doc_date), "เลขที่ตรวจรับ": formValues.inspectNo,
+                    "ผู้เบิก": p.requester_name || req.requester_name || '', "ชื่อผู้เบิก": p.requester_name || req.requester_name || '', 
+                    "ตำแหน่งผู้เบิก": getPosition(p.requester_name || req.requester_name), 
                     
                     "เล่มที่": "......", "เลขที่": "......",
-                    "items": itemsForWord
+                    "items": itemsForWord,
+
+                    // 🌟 ตัวแปรจ้างบุคลากร 
+                    "ชื่อผู้รับจ้าง": v ? v.vendor_name : (p.vendor_name || ''),
+                    "ที่อยู่": v ? v.address : '',
+                    "เบอร์": v ? v.phone : '',
+                    "ตำแหน่ง": p.emp_position || '',
+                    "สัญญาจ้างที่": p.contract_no || '',
+                    "คำสั่งจ้าง": p.order_no || '',
+                    "ตั้งแต่วันที่": formatD(p.contract_start),
+                    "ถึงวันที่": formatD(p.contract_end),
+                    "วงเงิน": formatMoney(p.contract_limit || 0),
+                    "วงเงินรวมตัวอักษร": ThaiBaht(p.contract_limit || 0),
+                    "ประจำเดือน": p.work_month || '',
+                    "วันแรกของเดือน": formatD(p.work_start),
+                    "วันสุดท้ายของเดือน": formatD(p.work_end),
+                    
+                    "ที่": 1,
+                    "รายการ": firstItem.name || '',
+                    "ราคาต่อหน่วย": formatMoney(firstItemPrice),
+                    "จำนวนเงิน": formatMoney(firstItemQty * firstItemPrice)
                 };
 
                 const response = await fetch(matchedTpl.file_url);
@@ -5610,9 +5667,9 @@
                 const out = doc.getZip().generate({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
                 
                 hideLoader();
-                window.saveAs(out, `เอกสาร${p.procurement_type}_${(p.po_number||'รอดำเนินการ').replace('/','-')}.docx`);
+                window.saveAs(out, `เอกสาร${procType}_${(p.po_number||'รอดำเนินการ').replace('/','-')}.docx`);
             } catch (error) {
-                hideLoader(); Swal.fire({ icon: 'error', title: 'สร้างเอกสารล้มเหลว', text: 'กรุณาตรวจสอบว่ามีแท็กพิมพ์ผิด หรือยังไม่ได้ใส่ <<#items>> ในไฟล์ Template หรือไม่' });
+                hideLoader(); Swal.fire({ icon: 'error', title: 'สร้างเอกสารล้มเหลว', text: 'เกิดข้อผิดพลาดในการโหลดแบบฟอร์ม หรือมีแท็กที่ไม่ถูกต้องในไฟล์ Word' });
             }
         };
 		
