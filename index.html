@@ -4182,7 +4182,12 @@
                 <div class="flex flex-wrap justify-between items-start gap-4 mb-6 text-sm">
                     <div>
                         <div class="font-bold text-slate-800 text-base mb-1">รหัสอ้างอิง: <span class="text-blue-600">${req.request_code}</span></div>
-                        <div class="font-bold text-slate-800 text-base">โครงการ: <span class="text-blue-600">${req.project_name}</span></div>
+                        <div class="font-bold text-slate-800 text-base mb-2">โครงการ: <span class="text-blue-600">${req.project_name}</span></div>
+                        
+                        <!-- 🌟 เพิ่มประเภทการเบิกตรงนี้ 🌟 -->
+                        <div class="font-bold text-slate-700 text-sm flex items-center gap-2">
+                            ประเภท: <span class="inline-block bg-indigo-50 border border-indigo-200 text-indigo-700 px-2.5 py-0.5 rounded-md text-xs shadow-sm">${req.expense_type || 'ไม่ได้ระบุ'}</span>
+                        </div>
                     </div>
                     <div class="text-right">
                         <div class="font-bold text-slate-800 mb-1">ผู้ขอเบิก: <span class="text-slate-600">${req.requester_name}</span></div>
@@ -4296,16 +4301,25 @@
                 html = `<div class="p-12 text-center text-slate-400 bg-white rounded-xl border border-slate-200">ไม่พบโครงการในฝ่ายที่เลือก</div>`;
             } else {
                 displayProjects.forEach(p => {
+                    // 🌟 กรองเอาแค่ใบเบิกที่มีตัวตนอยู่จริง (ไม่นับอันที่ถูกลบ) สำหรับโปรเจกต์นี้
                     const pExpenses = trackAllExpenses.filter(e => e.project_id === p.id);
+                    
+                    // นับยอดเงินเฉพาะที่ "อนุมัติแล้ว"
                     const pUsed = pExpenses.filter(e => e.status === 'อนุมัติแล้ว').reduce((sum, e) => sum + Number(e.total_amount), 0);
                     const pRemain = p.total_budget - pUsed;
                     const reqCount = pExpenses.length;
 
                     let actRows = '';
                     (p.activities || []).forEach(act => {
+                        // 🌟 ดึงใบเบิกของกิจกรรมย่อยนี้
                         const actExp = pExpenses.filter(e => e.activity_id === act.id);
+                        
+                        // นับยอดเงินเฉพาะที่ "อนุมัติแล้ว"
                         const actUsed = actExp.filter(e => e.status === 'อนุมัติแล้ว').reduce((sum, e) => sum + Number(e.total_amount), 0);
-                        const actCount = actExp.length;
+                        
+                        // 🌟 นับจำนวนครั้ง: เอาเฉพาะที่กำลังเดินเรื่องอยู่ หรือ อนุมัติแล้ว (ตัดใบที่ไม่อนุมัติ หรือลบทิ้งออกไป)
+                        const activeReqs = actExp.filter(e => e.status === 'อนุมัติแล้ว' || e.status === 'รอพิจารณา' || e.status === 'ตีกลับ (ให้แก้ไข)');
+                        const actCount = activeReqs.length;
 
                         actRows += `
                             <tr class="border-b border-slate-100 bg-white hover:bg-slate-50">

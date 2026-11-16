@@ -231,9 +231,58 @@
 
         // ==========================================
         // 3. หน้า Dashboard (หน้าแรก) 
-        // สร้างเลียนแบบตามภาพตัวอย่าง EGP EASY
         // ==========================================
-        function renderDashboardPage(container) {
+        async function renderDashboardPage(container) {
+            showLoader();
+            // 🌟 ดึงข้อมูลจากฐานข้อมูลจริง
+            const [procRes, itemRes] = await Promise.all([
+                supabaseClient.from('supply_procurements').select('*').order('id', { ascending: false }),
+                supabaseClient.from('supply_items').select('id')
+            ]);
+            hideLoader();
+
+            const procurements = procRes.data || [];
+            const items = itemRes.data || [];
+
+            // 🌟 คำนวณสถิติ
+            const buyList = procurements.filter(p => p.procurement_type === 'ซื้อ');
+            const hireList = procurements.filter(p => p.procurement_type === 'จ้าง' || p.procurement_type === 'จ้างบุคลากร');
+            
+            const totalBuy = buyList.length;
+            const totalHire = hireList.length;
+            const totalItems = items.length; 
+            const totalValue = procurements.reduce((sum, p) => sum + (Number(p.budget_amount) || 0), 0);
+
+            // 🌟 สร้าง HTML 5 รายการจัดซื้อล่าสุด
+            let recentBuyHtml = '';
+            buyList.slice(0, 5).forEach(p => {
+                recentBuyHtml += `
+                    <div class="flex justify-between items-center py-3 border-b border-slate-100 last:border-0 hover:bg-slate-50 transition px-2 rounded-lg">
+                        <div class="truncate pr-4 flex-1">
+                            <div class="font-bold text-slate-700 text-sm truncate" title="${p.subject_name}">${p.subject_name}</div>
+                            <div class="text-xs text-slate-500 mt-0.5">เลขที่: <span class="font-medium text-cyan-600">${p.po_number || '-'}</span> | วันที่: ${p.po_date || '-'}</div>
+                        </div>
+                        <div class="font-bold text-cyan-600 text-sm whitespace-nowrap bg-cyan-50 px-2 py-1 rounded-md">${formatMoney(p.budget_amount)} ฿</div>
+                    </div>
+                `;
+            });
+            if (!recentBuyHtml) recentBuyHtml = '<div class="flex items-center justify-center h-40 text-slate-400 text-sm">ยังไม่มีข้อมูลการจัดซื้อ</div>';
+
+            // 🌟 สร้าง HTML 5 รายการจัดจ้างล่าสุด
+            let recentHireHtml = '';
+            hireList.slice(0, 5).forEach(p => {
+                recentHireHtml += `
+                    <div class="flex justify-between items-center py-3 border-b border-slate-100 last:border-0 hover:bg-slate-50 transition px-2 rounded-lg">
+                        <div class="truncate pr-4 flex-1">
+                            <div class="font-bold text-slate-700 text-sm truncate" title="${p.subject_name}">${p.subject_name}</div>
+                            <div class="text-xs text-slate-500 mt-0.5">เลขที่: <span class="font-medium text-rose-600">${p.po_number || '-'}</span> | วันที่: ${p.po_date || '-'}</div>
+                        </div>
+                        <div class="font-bold text-rose-600 text-sm whitespace-nowrap bg-rose-50 px-2 py-1 rounded-md">${formatMoney(p.budget_amount)} ฿</div>
+                    </div>
+                `;
+            });
+            if (!recentHireHtml) recentHireHtml = '<div class="flex items-center justify-center h-40 text-slate-400 text-sm">ยังไม่มีข้อมูลการจัดจ้าง</div>';
+
             container.innerHTML = `
                 <div class="fade-in max-w-7xl mx-auto">
                     <!-- Banner ต้อนรับ -->
@@ -250,50 +299,51 @@
                         <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex justify-between items-center group">
                             <div>
                                 <div class="text-slate-500 text-xs font-bold mb-1">จำนวนจัดซื้อทั้งหมด</div>
-                                <div class="text-3xl font-bold text-slate-800">0</div>
+                                <div class="text-3xl font-bold text-slate-800">${totalBuy} <span class="text-sm font-normal text-slate-400">รายการ</span></div>
                             </div>
-                            <div class="w-12 h-12 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg shadow-red-500/30 group-hover:scale-110 transition"><i data-lucide="shopping-cart" class="w-5 h-5"></i></div>
+                            <div class="w-12 h-12 bg-cyan-500 text-white rounded-full flex items-center justify-center shadow-lg shadow-cyan-500/30 group-hover:scale-110 transition"><i data-lucide="shopping-cart" class="w-5 h-5"></i></div>
                         </div>
                         <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex justify-between items-center group">
                             <div>
                                 <div class="text-slate-500 text-xs font-bold mb-1">จำนวนจัดจ้างทั้งหมด</div>
-                                <div class="text-3xl font-bold text-slate-800">0</div>
+                                <div class="text-3xl font-bold text-slate-800">${totalHire} <span class="text-sm font-normal text-slate-400">รายการ</span></div>
                             </div>
-                            <div class="w-12 h-12 bg-orange-500 text-white rounded-full flex items-center justify-center shadow-lg shadow-orange-500/30 group-hover:scale-110 transition"><i data-lucide="briefcase" class="w-5 h-5"></i></div>
+                            <div class="w-12 h-12 bg-rose-500 text-white rounded-full flex items-center justify-center shadow-lg shadow-rose-500/30 group-hover:scale-110 transition"><i data-lucide="briefcase" class="w-5 h-5"></i></div>
                         </div>
                         <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex justify-between items-center group">
                             <div>
-                                <div class="text-slate-500 text-xs font-bold mb-1">พัสดุสิ้นเปลืองทั้งหมด</div>
-                                <div class="text-3xl font-bold text-slate-800">0</div>
+                                <div class="text-slate-500 text-xs font-bold mb-1">รายการพัสดุในระบบ</div>
+                                <div class="text-3xl font-bold text-slate-800">${totalItems} <span class="text-sm font-normal text-slate-400">รายการ</span></div>
                             </div>
                             <div class="w-12 h-12 bg-emerald-500 text-white rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/30 group-hover:scale-110 transition"><i data-lucide="package" class="w-5 h-5"></i></div>
                         </div>
                         <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex justify-between items-center group">
                             <div>
                                 <div class="text-slate-500 text-xs font-bold mb-1">มูลค่าซื้อ/จ้างทั้งหมด</div>
-                                <div class="text-3xl font-bold text-slate-800">0 <span class="text-sm font-normal text-slate-400">บาท</span></div>
+                                <div class="text-3xl font-bold text-slate-800">${formatMoney(totalValue)} <span class="text-sm font-normal text-slate-400">บาท</span></div>
                             </div>
-                            <div class="w-12 h-12 bg-blue-500 text-white rounded-full flex items-center justify-center shadow-lg shadow-blue-500/30 group-hover:scale-110 transition"><i data-lucide="bar-chart-2" class="w-5 h-5"></i></div>
+                            <div class="w-12 h-12 bg-indigo-500 text-white rounded-full flex items-center justify-center shadow-lg shadow-indigo-500/30 group-hover:scale-110 transition"><i data-lucide="bar-chart-2" class="w-5 h-5"></i></div>
                         </div>
                     </div>
 
                     <!-- 2 ตารางล่าง -->
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 min-h-[300px]">
-                            <h3 class="font-bold text-slate-800 mb-4 flex items-center gap-2 border-b border-slate-100 pb-3"><i data-lucide="clock" class="w-5 h-5 text-red-500"></i> ข้อมูล 5 รายการจัดซื้อล่าสุด</h3>
-                            <div class="flex items-center justify-center h-40 text-slate-400 text-sm">
-                                ยังไม่มีข้อมูลการจัดซื้อ
+                            <h3 class="font-bold text-slate-800 mb-4 flex items-center gap-2 border-b border-slate-100 pb-3"><i data-lucide="shopping-bag" class="w-5 h-5 text-cyan-500"></i> ข้อมูล 5 รายการจัดซื้อล่าสุด</h3>
+                            <div class="flex flex-col">
+                                ${recentBuyHtml}
                             </div>
                         </div>
                         <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 min-h-[300px]">
-                            <h3 class="font-bold text-slate-800 mb-4 flex items-center gap-2 border-b border-slate-100 pb-3"><i data-lucide="clock" class="w-5 h-5 text-orange-500"></i> ข้อมูล 5 รายการจัดจ้างล่าสุด</h3>
-                            <div class="flex items-center justify-center h-40 text-slate-400 text-sm">
-                                ยังไม่มีข้อมูลการจัดจ้าง
+                            <h3 class="font-bold text-slate-800 mb-4 flex items-center gap-2 border-b border-slate-100 pb-3"><i data-lucide="briefcase" class="w-5 h-5 text-rose-500"></i> ข้อมูล 5 รายการจัดจ้างล่าสุด</h3>
+                            <div class="flex flex-col">
+                                ${recentHireHtml}
                             </div>
                         </div>
                     </div>
                 </div>
             `;
+            lucide.createIcons();
         }
 
         // หน้า Placeholder สำหรับเมนูที่ยังไม่ได้ทำ
