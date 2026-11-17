@@ -4597,7 +4597,7 @@
                                 .catch(() => resolve(getEmpty()));
                         });
                     },
-                    getSize: function() { return [120, 45]; }
+                    getSize: function() { return [80, 30]; }
                 };
 
                 const imageModule = new window.ImageModule(opts);
@@ -4711,7 +4711,7 @@
                                 .catch(() => resolve(getEmpty()));
                         });
                     },
-                    getSize: function() { return [120, 45]; }
+                    getSize: function() { return [80, 30]; }
                 };
 
                 const imageModule = new window.ImageModule(opts);
@@ -5453,15 +5453,26 @@
             const { data: req } = await supabaseClient.from('expense_requests').select('*').eq('id', reqId).single();
             if (!req) { hideLoader(); return Swal.fire({icon: 'error', title:'ไม่พบข้อมูลใบเบิก'}); }
 
-            // 2. ดึงข้อมูลจัดจ้าง (ถ้าแอดมินพัสดุทำรายการไว้แล้ว) เพื่อเช็คว่าเป็น จ้างบุคลากร หรือไม่
+            // 2. ดึงข้อมูลจัดจ้าง เพื่อเช็คว่าพัสดุทำรายการหรือยัง
             const { data: proc } = await supabaseClient.from('supply_procurements').select('*').eq('expense_request_id', reqId).single();
+            
+            // 🌟 เพิ่มบล็อกนี้เพื่อดักจับ ถ้าพัสดุยังไม่ทำรายการ ให้เด้งเตือนและหยุดการทำงาน 🌟
+            if (!proc) {
+                hideLoader();
+                return Swal.fire({
+                    icon: 'warning',
+                    title: 'ยังพิมพ์ไม่ได้ครับ',
+                    text: 'เจ้าหน้าที่พัสดุยังไม่ได้ลงข้อมูล/ออกเลขใบสั่งซื้อสั่งจ้างสำหรับรายการนี้ครับ',
+                    confirmButtonColor: '#4f46e5'
+                });
+            }
             
             const amt = parseFloat(req.total_amount) || 0;
             const isOver5000 = amt > 5000;
             
-            // 🌟 เช็คประเภท: ถ้าระบบพัสดุทำรายการแล้ว ให้ยึดประเภทจากพัสดุ (เช่น จ้างบุคลากร) แต่ถ้ายัง ให้ยึดจากใบเบิก
-            let procType = proc ? proc.procurement_type : (req.expense_type === 'ซื้อวัสดุ' ? 'ซื้อ' : 'จ้าง');
-            const vendorId = proc ? proc.vendor_id : 0;
+            // 🌟 เช็คประเภท: เนื่องจากดัก proc ไว้แล้วตรงนี้เลยมั่นใจได้ว่ามี proc แน่นอน
+            let procType = proc.procurement_type;
+            const vendorId = proc.vendor_id;
             
             // 3. ดึง Template, ข้อมูลโรงเรียน, ร้านค้า และบุคลากร
             const [tplRes, schoolRes, vRes, userRes, projRes] = await Promise.all([
