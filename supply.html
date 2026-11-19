@@ -95,6 +95,112 @@
             <div class="grid grid-cols-3 gap-4 max-h-[60vh] overflow-y-auto p-1" id="mobile-grid-menu"></div>
         </div>
     </div>
+	
+	<!-- ================= MODALS ตรวจรับพัสดุ ================= -->
+
+    <!-- 1. Modal แสดงรายการวัสดุ/ครุภัณฑ์ที่รอตรวจรับ -->
+    <div id="receive-list-modal" class="hidden fixed inset-0 z-[80] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-2 md:p-6 fade-in">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
+            <div class="bg-teal-600 text-white p-4 flex justify-between items-center shrink-0">
+                <h3 class="font-bold text-lg flex items-center gap-2"><i data-lucide="check-square" class="w-5 h-5"></i> ตรวจรับพัสดุเข้าคลัง / ทะเบียนทรัพย์สิน</h3>
+                <button onclick="document.getElementById('receive-list-modal').classList.add('hidden')" class="text-white hover:bg-white/20 p-1.5 rounded-lg transition"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div class="p-6 overflow-y-auto flex-1 bg-slate-50" id="receive_list_body"></div>
+            <div class="bg-white p-4 border-t border-slate-200 flex justify-end shrink-0">
+                <button onclick="document.getElementById('receive-list-modal').classList.add('hidden')" class="bg-slate-500 hover:bg-slate-600 text-white px-6 py-2 rounded-xl font-medium transition">ปิดหน้าต่าง</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. Modal ฟอร์มตรวจรับวัสดุ (เข้าบัญชีวัสดุ) -->
+    <div id="receive-material-modal" class="hidden fixed inset-0 z-[90] bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4 fade-in">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+            <div class="bg-emerald-600 text-white p-4 flex justify-between items-center shrink-0">
+                <h3 class="font-bold flex items-center gap-2"><i data-lucide="package" class="w-5 h-5"></i> บันทึกตรวจรับวัสดุเข้าบัญชีวัสดุ</h3>
+                <button onclick="document.getElementById('receive-material-modal').classList.add('hidden')" class="text-white hover:bg-white/20 p-1 rounded-lg transition"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div class="p-6 overflow-y-auto space-y-4 flex-1 bg-slate-50 text-sm">
+                <input type="hidden" id="r_mat_proc_id">
+                <input type="hidden" id="r_mat_item_idx">
+                <input type="hidden" id="r_mat_price">
+                <input type="hidden" id="r_mat_unit">
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div><label class="block font-bold text-slate-700 mb-1">รหัสพัสดุ</label><input type="text" id="r_mat_code" readonly class="w-full border border-slate-200 bg-slate-100 rounded-xl px-3 py-2 text-slate-500"></div>
+                    <div><label class="block font-bold text-slate-700 mb-1">ชื่อพัสดุ</label><input type="text" id="r_mat_name" readonly class="w-full border border-slate-200 bg-slate-100 rounded-xl px-3 py-2 text-slate-500"></div>
+                    <div><label class="block font-bold text-slate-700 mb-1">จำนวนอย่างสูง</label><input type="number" id="r_mat_max" placeholder="0" class="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white outline-none focus:border-emerald-500"></div>
+                    <div><label class="block font-bold text-slate-700 mb-1">จำนวนอย่างต่ำ</label><input type="number" id="r_mat_min" placeholder="0" class="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white outline-none focus:border-emerald-500"></div>
+                    <div class="md:col-span-2"><label class="block font-bold text-slate-700 mb-1">ขนาดหรือลักษณะ <span class="text-red-500">*</span></label><input type="text" id="r_mat_detail" placeholder="ระบุขนาด ยี่ห้อ หรือลักษณะ" class="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white outline-none focus:border-emerald-500"></div>
+                    <div class="md:col-span-2"><label class="block font-bold text-slate-700 mb-1">ที่เก็บ <span class="text-red-500">*</span></label><input type="text" id="r_mat_loc" placeholder="เช่น ห้องพัสดุ, ห้องธุรการ" class="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white outline-none focus:border-emerald-500"></div>
+                    <div class="md:col-span-2"><label class="block font-bold text-slate-700 mb-1">รับจาก (ผู้ขาย)</label><input type="text" id="r_mat_vendor" readonly class="w-full border border-slate-200 bg-slate-100 rounded-xl px-3 py-2 text-slate-500"></div>
+                    <div><label class="block font-bold text-slate-700 mb-1">เลขที่เอกสาร / ใบส่งของ <span class="text-red-500">*</span></label><input type="text" id="r_mat_docno" placeholder="ระบุเลขที่ใบส่งของ" class="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white outline-none focus:border-emerald-500"></div>
+                    <div><label class="block font-bold text-slate-700 mb-1">วันที่ตรวจรับ</label><input type="date" id="r_mat_date" class="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white outline-none focus:border-emerald-500"></div>
+                    <div><label class="block font-bold text-slate-700 mb-1">จำนวนที่รับ</label><input type="number" id="r_mat_qty" readonly class="w-full border border-slate-200 bg-slate-100 rounded-xl px-3 py-2 font-bold text-emerald-700"></div>
+                </div>
+            </div>
+            <div class="bg-white p-4 border-t border-slate-200 flex justify-end gap-2 shrink-0">
+                <button onclick="document.getElementById('receive-material-modal').classList.add('hidden')" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-5 py-2 rounded-xl font-medium transition">ยกเลิก</button>
+                <button onclick="window.saveReceiveMaterial()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-xl font-bold shadow-md transition flex items-center gap-2"><i data-lucide="save" class="w-4 h-4"></i> บันทึกตรวจรับ</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. Modal ฟอร์มตรวจรับครุภัณฑ์ (เข้าทะเบียนคุมทรัพย์สิน) -->
+    <div id="receive-asset-modal" class="hidden fixed inset-0 z-[90] bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4 fade-in">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
+            <div class="bg-blue-600 text-white p-4 flex justify-between items-center shrink-0">
+                <h3 class="font-bold flex items-center gap-2"><i data-lucide="monitor" class="w-5 h-5"></i> บันทึกตรวจรับครุภัณฑ์เข้าทะเบียนคุมทรัพย์สิน</h3>
+                <button onclick="document.getElementById('receive-asset-modal').classList.add('hidden')" class="text-white hover:bg-white/20 p-1 rounded-lg transition"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div class="p-6 overflow-y-auto space-y-4 flex-1 bg-slate-50 text-sm">
+                <input type="hidden" id="r_asset_proc_id">
+                <input type="hidden" id="r_asset_item_idx">
+                <input type="hidden" id="r_asset_record_type" value="ตรวจรับจากจัดซื้อ">
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div><label class="block font-bold text-slate-700 mb-1">ปีงบประมาณ</label><input type="text" id="r_asset_year" class="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white"></div>
+                    <div><label class="block font-bold text-slate-700 mb-1">รหัสครุภัณฑ์ <span class="text-red-500">*</span></label><input type="text" id="r_asset_code" placeholder="เช่น 7440-001-0001/69" class="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white font-bold text-blue-700"></div>
+                    <div><label class="block font-bold text-slate-700 mb-1">รหัสประเภท</label><input type="text" id="r_asset_catcode" readonly class="w-full border border-slate-200 bg-slate-100 rounded-xl px-3 py-2 text-slate-500"></div>
+                    <div><label class="block font-bold text-slate-700 mb-1">ชื่อประเภท</label><input type="text" id="r_asset_catname" readonly class="w-full border border-slate-200 bg-slate-100 rounded-xl px-3 py-2 text-slate-500"></div>
+                    <div class="md:col-span-2"><label class="block font-bold text-slate-700 mb-1">ชื่อครุภัณฑ์</label><input type="text" id="r_asset_name" readonly class="w-full border border-slate-200 bg-slate-100 rounded-xl px-3 py-2 text-slate-500"></div>
+                    <div class="md:col-span-2"><label class="block font-bold text-slate-700 mb-1">คุณลักษณะ / คำอธิบาย <span class="text-red-500">*</span></label><textarea id="r_asset_desc" rows="2" class="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white"></textarea></div>
+                    <div class="md:col-span-2"><label class="block font-bold text-slate-700 mb-1">สถานที่ตั้ง / หน่วยงานรับผิดชอบ <span class="text-red-500">*</span></label><input type="text" id="r_asset_loc" class="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white"></div>
+                    <div class="md:col-span-2"><label class="block font-bold text-slate-700 mb-1">ผู้ขาย / ผู้รับจ้าง</label><input type="text" id="r_asset_vendor" readonly class="w-full border border-slate-200 bg-slate-100 rounded-xl px-3 py-2 text-slate-500"></div>
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">ประเภทเงิน</label>
+                        <select id="r_asset_fund" class="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white">
+                            <option value="เงินงบประมาณ">เงินงบประมาณ</option>
+                            <option value="เงินนอกงบประมาณ">เงินนอกงบประมาณ</option>
+                            <option value="เงินบริจาค/เงินช่วยเหลือ">เงินบริจาค/เงินช่วยเหลือ</option>
+                            <option value="อื่นๆ">อื่นๆ</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">วิธีที่ได้มา</label>
+                        <select id="r_asset_method" class="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white">
+                            <option value="เฉพาะเจาะจง">เฉพาะเจาะจง</option>
+                            <option value="ตกลงราคา">ตกลงราคา</option>
+                            <option value="สอบราคา">สอบราคา</option>
+                            <option value="ประกวดราคา">ประกวดราคา</option>
+                            <option value="วิธีพิเศษ">วิธีพิเศษ</option>
+                            <option value="รับบริจาค">รับบริจาค</option>
+                            <option value="ประกาศเชิญชวนทั่วไป">ประกาศเชิญชวนทั่วไป</option>
+                            <option value="คัดเลือก">คัดเลือก</option>
+                        </select>
+                    </div>
+                    <div><label class="block font-bold text-slate-700 mb-1">หน่วยนับ</label><input type="text" id="r_asset_unit" readonly class="w-full border border-slate-200 bg-slate-100 rounded-xl px-3 py-2 text-slate-500"></div>
+                    <div><label class="block font-bold text-slate-700 mb-1">อายุการใช้งาน (ปี)</label><input type="number" id="r_asset_life" value="5" oninput="window.calcExpireDate()" class="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white"></div>
+                    <div><label class="block font-bold text-slate-700 mb-1">วันที่ได้มา</label><input type="date" id="r_asset_acq_date" onchange="window.calcExpireDate()" class="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white"></div>
+                    <div><label class="block font-bold text-slate-700 mb-1">วันหมดอายุการใช้งาน</label><input type="date" id="r_asset_exp_date" readonly class="w-full border border-slate-200 bg-slate-100 rounded-xl px-3 py-2 text-slate-500"></div>
+                    <div class="md:col-span-2"><label class="block font-bold text-slate-700 mb-1">ราคา (บาท)</label><input type="text" id="r_asset_price" readonly class="w-full border border-slate-200 bg-slate-100 rounded-xl px-3 py-2 font-bold text-right text-blue-700"></div>
+                </div>
+            </div>
+            <div class="bg-white p-4 border-t border-slate-200 flex justify-end gap-2 shrink-0">
+                <button onclick="document.getElementById('receive-asset-modal').classList.add('hidden')" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-5 py-2 rounded-xl font-medium transition">ยกเลิก</button>
+                <button onclick="window.saveReceiveAsset()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-xl font-bold shadow-md transition flex items-center gap-2"><i data-lucide="save" class="w-4 h-4"></i> บันทึกครุภัณฑ์</button>
+            </div>
+        </div>
+    </div>
 
     <script>
         // ==========================================
@@ -1855,15 +1961,15 @@
                 <div class="bg-white border border-blue-200 rounded-xl overflow-hidden shadow-sm">
                     <div class="bg-blue-50 p-2.5 border-b border-blue-200 text-blue-800 font-bold text-sm">ส่วนที่ 1 ข้อมูลรายงานขอซื้อ/จ้าง</div>
                     <div class="p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
-                        ${pInput('ปีงบประมาณ', 'p_year', 'text', `value="${getVal('academic_year', window.sysAcademicYear)}" oninput="window.previewPoNumber()"`)}
-                        <div>
-                            <label class="block text-xs font-bold text-slate-700 mb-1">ประเภทของงาน</label>
-                            <select id="p_type" class="w-full border border-slate-300 rounded-lg px-3 py-2 outline-none focus:border-indigo-500 bg-white" onchange="window.previewPoNumber(); window.toggleProcForm();">
-                                <option value="ซื้อ" ${initialType === 'ซื้อ' ? 'selected' : ''}>ซื้อ</option>
-                                <option value="จ้าง" ${initialType === 'จ้าง' ? 'selected' : ''}>จ้าง</option>
-                                <option value="จ้างบุคลากร" ${initialType === 'จ้างบุคลากร' ? 'selected' : ''}>จ้างบุคลากร</option>
-                            </select>
-                        </div>
+                        ${pInput('ปีงบประมาณ', 'p_year', 'text', `value="${getVal('academic_year', window.sysAcademicYear)}"`)}
+							<div>
+								<label class="block text-xs font-bold text-slate-700 mb-1">ประเภทของงาน</label>
+								<select id="p_type" class="w-full border border-slate-300 rounded-lg px-3 py-2 outline-none focus:border-indigo-500 bg-white" onchange="window.toggleProcForm();">
+									<option value="ซื้อ" ${initialType === 'ซื้อ' ? 'selected' : ''}>ซื้อ</option>
+									<option value="จ้าง" ${initialType === 'จ้าง' ? 'selected' : ''}>จ้าง</option>
+									<option value="จ้างบุคลากร" ${initialType === 'จ้างบุคลากร' ? 'selected' : ''}>จ้างบุคลากร</option>
+								</select>
+							</div>
                         ${pInput('วันที่บันทึกรายงาน', 'p_report_date', 'date', `value="${getVal('report_date', exp.doc_date || today)}"`)}
                         <div class="md:col-span-2">${pInput('ชื่อรายการที่จะซื้อ/จ้าง', 'p_subject', 'text', `value="${getVal('subject_name', '')}"`)}</div>
                         ${pInput('เหตุผล', 'p_reason', 'text', `value="${getVal('reason', '')}" onkeyup="document.getElementById('p_req_reason').value = this.value"`)}
@@ -1961,16 +2067,16 @@
                     </div>
                 </div>
 
-                <!-- 🌟 ส่วนที่ 5 ข้อมูลใบสั่งซื้อ/จ้าง (ย้ายขึ้นมาต่อส่วนที่ 4) -->
-                <div class="grid grid-cols-1 gap-4 mt-4">
-                    <div class="bg-white border border-slate-300 rounded-xl p-4 shadow-sm">
-                        <h4 class="font-bold text-slate-800 text-sm mb-3">ส่วนที่ 5 ข้อมูลเลขคำสั่งจ้าง / ใบสั่งซื้อ</h4>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            ${pInput('เลขที่คำสั่งซื้อ/จ้าง (รันอัตโนมัติ)', 'p_po_num', 'text', `value="${getVal('po_number', '')}" readonly class="bg-slate-100 font-bold text-blue-600"`)}
-                            ${pInput('วันที่ใบสั่งซื้อ/จ้าง', 'p_po_date', 'date', `value="${getVal('po_date', exp.doc_date || today)}"`)}
-                        </div>
-                    </div>
-                </div>
+                <!-- 🌟 ส่วนที่ 5 ข้อมูลใบสั่งซื้อ/จ้าง -->
+				<div class="grid grid-cols-1 gap-4 mt-4">
+					<div class="bg-white border border-slate-300 rounded-xl p-4 shadow-sm">
+						<h4 class="font-bold text-slate-800 text-sm mb-3">ส่วนที่ 5 ข้อมูลเลขคำสั่งจ้าง / ใบสั่งซื้อ</h4>
+						<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+							${pInput('เลขที่คำสั่งซื้อ/จ้าง', 'p_po_num', 'text', `value="${getVal('po_number', '')}" placeholder="ระบุเลขที่ เช่น 001/2570"`)}
+							${pInput('วันที่ใบสั่งซื้อ/จ้าง', 'p_po_date', 'date', `value="${getVal('po_date', exp.doc_date || today)}"`)}
+						</div>
+					</div>
+				</div>
 
                 <!-- 🌟 FORM STANDARD BOTTOM (ซื้อ/จ้าง ทั่วไป ส่วนที่ 6-8) -->
                 <div id="form_standard_bottom" class="space-y-4 mt-4">
@@ -2035,7 +2141,6 @@
 
             // 🌟 เพิ่มให้สั่งคำนวณวันครบกำหนด 30 วัน ทันทีที่เปิดฟอร์มใหม่
             if(!editId) {
-                window.previewPoNumber();
                 window.calcEmpDueDate(); 
             }
             document.getElementById('proc-modal').classList.remove('hidden');
