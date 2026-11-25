@@ -3571,6 +3571,13 @@
                     
                     "ชื่อเจ้าหน้าที่": school.procurement_officer || '', 
                     "ที่อยู่ร้าน": v ? v.address : '', "เบอร์ร้าน": v ? v.phone : '', "เบอร์ร้าน ": v ? v.phone : '',
+					"ชื่อร้าน": v ? v.vendor_name : '',
+                    "ชื่อร้าน ": v ? v.vendor_name : '',
+                    "ชื่อร้านค้า": v ? v.vendor_name : '',
+                    "ร้านค้า": v ? v.vendor_name : '',
+                    "ผู้ขาย": v ? v.vendor_name : '',
+                    "ชื่อผู้ขาย": v ? v.vendor_name : '',
+                    "ผู้รับจ้าง": v ? v.vendor_name : '',
                     "เลขเสียภาษี": v ? v.tax_id : '', "เลขเสียภาษี ": v ? v.tax_id : '', 
                     "วันที่ขอ": formatD(p.report_date), "เลขที่ตรวจรับ": formValues.inspectNo,
                     "ผู้เบิก": p.requester_name || '', "ชื่อผู้เบิก": p.requester_name || '', 
